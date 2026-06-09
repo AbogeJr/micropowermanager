@@ -32,9 +32,9 @@ use App\Plugins\WaveMoneyPaymentProvider\Providers\WaveMoneyPaymentProviderServi
 use App\Providers\ApiKeyServiceProvider;
 use App\Providers\AppServiceProvider;
 use App\Providers\HorizonServiceProvider;
+use App\Plugins\SafaricomMobileMoney\Providers\SafaricomMobileMoneyServiceProvider;
 use App\Providers\QueueServiceProvider;
 use App\Providers\ServicesProvider;
-use Inensus\SafaricomMobileMoney\Providers\SafaricomMobileMoneyServiceProvider;
 
 return [
     ApiKeyServiceProvider::class,

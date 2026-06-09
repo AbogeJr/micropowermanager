@@ -12,12 +12,12 @@ use App\Plugins\SwiftaPaymentProvider\Models\SwiftaTransaction;
 use App\Plugins\SwiftaPaymentProvider\Providers\SwiftaTransactionProvider;
 use App\Plugins\WavecomPaymentProvider\Models\WaveComTransaction;
 use App\Plugins\WavecomPaymentProvider\Providers\WaveComTransactionProvider;
+use App\Plugins\SafaricomMobileMoney\Models\SafaricomTransaction;
+use App\Plugins\SafaricomMobileMoney\Providers\SafaricomMobileMoneyTransactionProvider;
 use App\Plugins\WaveMoneyPaymentProvider\Models\WaveMoneyTransaction;
 use App\Plugins\WaveMoneyPaymentProvider\Providers\WaveMoneyTransactionProvider;
 use App\Providers\AgentTransactionProvider;
 use App\Providers\Interfaces\ITransactionProvider;
-use Inensus\SafaricomMobileMoney\Models\SafaricomTransaction;
-use Inensus\SafaricomMobileMoney\Providers\SafaricomMobileMoneyTransactionProvider;
 
 class TransactionAdapter {
     public static function getTransaction(BasePaymentProviderTransaction $transactionProvider): ?ITransactionProvider {

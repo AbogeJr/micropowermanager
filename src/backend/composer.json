@@ -73,8 +73,7 @@
     "psr-4": {
       "App\\": "app/",
       "Database\\Factories\\": "database/factories/",
-      "Database\\Seeders\\": "database/seeders/",
-      "Inensus\\SafaricomMobileMoney\\": "packages/inensus/safaricom-mobile-money/src"
+      "Database\\Seeders\\": "database/seeders/"
     }
   },
   "autoload-dev": {
