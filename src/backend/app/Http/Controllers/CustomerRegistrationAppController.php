@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AndroidAppRequest;
 use App\Http\Resources\ApiResource;
+use App\Services\CustomerRegistrationAppService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use MPM\Apps\CustomerRegistration\CustomerRegistrationAppService;
 
 class CustomerRegistrationAppController extends Controller {
     public function __construct(private CustomerRegistrationAppService $customerRegistrationAppService) {}
@@ -22,7 +22,7 @@ class CustomerRegistrationAppController extends Controller {
         } catch (\Exception $e) {
             DB::connection('tenant')->rollBack();
             Log::critical('Error while adding new Customer', ['message' => $e->getMessage()]);
-            throw new \Exception($e->getMessage());
+            throw new \Exception($e->getMessage(), $e->getCode(), $e);
         }
     }
 }

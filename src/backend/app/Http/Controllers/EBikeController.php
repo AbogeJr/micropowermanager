@@ -6,11 +6,11 @@ use App\Events\NewLogEvent;
 use App\Http\Requests\StoreEBikeRequest;
 use App\Http\Resources\ApiResource;
 use App\Services\AppliancePersonService;
+use App\Services\DeviceService;
+use App\Services\EBikeDeviceService;
+use App\Services\EBikeService;
 use App\Services\ManufacturerService;
 use Illuminate\Http\Request;
-use MPM\Device\DeviceService;
-use MPM\EBike\EBikeDeviceService;
-use MPM\EBike\EBikeService;
 
 class EBikeController extends Controller {
     public function __construct(
@@ -46,7 +46,7 @@ class EBikeController extends Controller {
 
     public function search(Request $request): ApiResource {
         $term = $request->input('term');
-        $paginate = $request->input('paginate') ?? 1;
+        $paginate = $request->input('paginate', 1);
 
         return ApiResource::make($this->eBikeService->search($term, $paginate));
     }

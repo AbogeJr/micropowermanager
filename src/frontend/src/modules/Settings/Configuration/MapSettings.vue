@@ -4,7 +4,7 @@
       class="md-layout md-gutter md-size-50 md-small-size-100"
       style="padding: 1rem"
     >
-      <div class="md-layout-item md-size-33 md-small-size-50">
+      <div class="md-layout-item md-size-33 md-small-size-100">
         <md-field :class="{ 'md-invalid': errors.has('Zoom') }">
           <label for="Zoom">Default Zoom</label>
           <md-input
@@ -18,7 +18,7 @@
           <span class="md-error">{{ errors.first("Zoom") }}</span>
         </md-field>
       </div>
-      <div class="md-layout-item md-size-33 md-small-size-50">
+      <div class="md-layout-item md-size-33 md-small-size-100">
         <md-field>
           <label for="provider">Default Provider</label>
           <md-select
@@ -39,7 +39,7 @@
       <div class="md-layout-item md-size-100 md-small-size-100">
         <md-subheader>Set Map Starting Points</md-subheader>
       </div>
-      <div class="md-layout-item md-size-33 md-small-size-50">
+      <div class="md-layout-item md-size-33 md-small-size-100">
         <md-field :class="{ 'md-invalid': errors.has($tc('words.latitude')) }">
           <label for="latitude">{{ $tc("words.latitude") }}</label>
           <md-input
@@ -50,14 +50,14 @@
             step="any"
             @change="setCenterPoints"
             maxlength="9"
-            v-validate="'required|decimal:5|max:8'"
+            v-validate="'required|decimal:6'"
           />
           <span class="md-error">
             {{ errors.first($tc("words.latitude")) }}
           </span>
         </md-field>
       </div>
-      <div class="md-layout-item md-size-33 md-small-size-50">
+      <div class="md-layout-item md-size-33 md-small-size-100">
         <md-field
           :class="{
             'md-invalid': errors.has($tc('words.longitude')),
@@ -72,7 +72,7 @@
             step="any"
             @change="setCenterPoints"
             maxlength="9"
-            v-validate="'required|decimal:5|max:8'"
+            v-validate="'required|decimal:6'"
           />
           <span class="md-error">
             {{ errors.first($tc("words.longitude")) }}
@@ -101,10 +101,10 @@
 </template>
 
 <script>
-import { MapSettingsService } from "@/services/MapSettingsService"
-import { EventBus } from "@/shared/eventbus"
 import SettingsMap from "@/modules/Map/SettingsMap.vue"
-import { MappingService } from "@/services/MappingService"
+import { MappingService } from "@/services/MappingService.js"
+import { MapSettingsService } from "@/services/MapSettingsService.js"
+import { EventBus } from "@/shared/eventbus.js"
 
 export default {
   name: "MapSettings",
@@ -192,7 +192,7 @@ export default {
 }
 </script>
 
-<style lang="css">
+<style scoped lang="scss">
 .map-area {
   display: block; /* or any other display property you want initially */
 }

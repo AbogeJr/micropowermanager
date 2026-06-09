@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\Auth\Permission;
+use App\Models\Auth\Role;
+
 return [
     'models' => [
         /*
@@ -11,7 +14,7 @@ return [
          * `Spatie\Permission\Contracts\Permission` contract.
          */
 
-        'permission' => Spatie\Permission\Models\Permission::class,
+        'permission' => Permission::class,
 
         /*
          * When using the "HasRoles" trait from this package, we need to know which
@@ -22,7 +25,7 @@ return [
          * `Spatie\Permission\Contracts\Role` contract.
          */
 
-        'role' => Spatie\Permission\Models\Role::class,
+        'role' => Role::class,
     ],
 
     'table_names' => [
@@ -32,7 +35,7 @@ return [
          * default value but you may easily change it to any table you like.
          */
 
-        'roles' => 'roles_permission',
+        'roles' => 'roles',
 
         /*
          * When using the "HasRoles" trait from this package, we need to know which

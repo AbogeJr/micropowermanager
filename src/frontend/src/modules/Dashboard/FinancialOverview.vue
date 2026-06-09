@@ -5,6 +5,7 @@
     button
     button-text="Set Period"
     button-color="red"
+    color="primary"
     @widgetAction="showPeriod"
     button-icon="calendar_today"
   >
@@ -85,11 +86,12 @@
 </template>
 
 <script>
-import Widget from "@/shared/Widget.vue"
 import moment from "moment"
-import { ClusterService } from "@/services/ClusterService"
+
+import { notify } from "@/mixins/notify.js"
+import { ClusterService } from "@/services/ClusterService.js"
 import ChartCard from "@/shared/ChartCard.vue"
-import { notify } from "@/mixins/notify"
+import Widget from "@/shared/Widget.vue"
 
 export default {
   name: "FinancialOverview",
@@ -97,7 +99,7 @@ export default {
   mixins: [notify],
   props: {
     clusterId: {
-      type: [Number, null],
+      type: [Number, String],
       default: null,
     },
     revenue: {
@@ -127,10 +129,8 @@ export default {
         },
       },
       chartOptions: {
-        chart: {
-          title: "",
-          subtitle: "",
-        },
+        title: "",
+        subtitle: "",
       },
     }
   },
@@ -144,21 +144,15 @@ export default {
     let endDate = currentDate
     this.setDate(startDate, "from")
     this.setDate(endDate, "to")
-    this.getClusterFinancialData()
+    if (!this.clusterId) {
+      this.getClusterFinancialData()
+    }
   },
   watch: {
-    "clusterService.financialData": {
+    revenue: {
       handler(newVal) {
-        if (newVal) {
-          this.lineChartData = this.clusterService.lineChartData(true)
-          this.columnChartData = this.clusterService.columnChartData(
-            false,
-            "cluster",
-          )
-          this.pieChartData = this.clusterService.columnChartData(
-            false,
-            "cluster",
-          )
+        if (this.clusterId && newVal && newVal.length > 0) {
+          this.clusterService.financialData = newVal
         }
       },
       deep: true,
@@ -177,14 +171,17 @@ export default {
       this.loading = true
 
       try {
-        const financialData = await this.clusterService.getAllRevenues(
-          "monthly",
-          this.period.from,
-          this.period.to,
-        )
-        this.clusterService.financialData = financialData
-
-        this.periodChanged(this.period.from, this.period.to)
+        if (this.clusterId) {
+          this.periodChanged(this.period.from, this.period.to)
+        } else {
+          const financialData = await this.clusterService.getAllRevenues(
+            "monthly",
+            this.period.from,
+            this.period.to,
+          )
+          this.clusterService.financialData = financialData
+          this.periodChanged(this.period.from, this.period.to)
+        }
 
         this.setPeriod = false
       } catch (error) {
@@ -203,6 +200,9 @@ export default {
     },
   },
   computed: {
+    chartType() {
+      return this.clusterId ? "miniGrid" : "cluster"
+    },
     periodText() {
       return this.period.from + " - " + this.period.to
     },
@@ -210,16 +210,16 @@ export default {
       return this.clusterService.lineChartData(true)
     },
     columnChartData() {
-      return this.clusterService.columnChartData(false, "cluster")
+      return this.clusterService.columnChartData(false, this.chartType)
     },
     pieChartData() {
-      return this.clusterService.columnChartData(false, "cluster")
+      return this.clusterService.columnChartData(false, this.chartType)
     },
   },
 }
 </script>
 
-<style>
+<style scoped lang="scss">
 .datepicker-right .vdp-datepicker__calendar {
   right: 0;
 }

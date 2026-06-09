@@ -7,14 +7,14 @@ use App\Models\Address\Address;
 use App\Models\Address\HasAddressesInterface;
 use App\Models\Agent;
 use App\Models\AgentSoldAppliance;
-use App\Models\AssetPerson;
+use App\Models\AppliancePerson;
 use App\Models\Base\BaseModel;
 use App\Models\Country;
-use App\Models\CustomerGroup;
 use App\Models\Device;
+use App\Models\MiniGrid;
 use App\Models\PaymentHistory;
-use App\Models\Role\RoleInterface;
-use App\Models\Role\Roles;
+use App\Models\PersonDocument;
+use App\Models\Ticket\Ticket;
 use Carbon\Carbon;
 use Database\Factories\Person\PersonFactory;
 use Illuminate\Database\Eloquent\Collection;
@@ -27,26 +27,41 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\DB;
-use Inensus\Ticket\Models\Ticket;
 
 /**
  * Class Person.
  *
- * @property int                      $id
- * @property string                   $title
- * @property string                   $education
- * @property string                   $name
- * @property string                   $surname
- * @property mixed                    $birth_date
- * @property string                   $sex                  TODO: replace with gender
- * @property int                      $nationality
- * @property int                      $is_customer
- * @property Collection<int, Ticket>  $tickets
- * @property mixed                    $agent_sold_appliance
- * @property Collection<int, Device>  $devices
- * @property Collection<int, Address> $addresses
+ * @property      int                              $id
+ * @property      string|null                      $title
+ * @property      string|null                      $education
+ * @property      string                           $name
+ * @property      string                           $surname
+ * @property      \Illuminate\Support\Carbon|null  $birth_date
+ * @property      string|null                      $gender
+ * @property      int|null                         $nationality
+ * @property      int                              $is_customer
+ * @property      string                           $type
+ * @property      int|null                         $mini_grid_id
+ * @property      \Illuminate\Support\Carbon|null  $deleted_at
+ * @property      \Illuminate\Support\Carbon|null  $created_at
+ * @property      \Illuminate\Support\Carbon|null  $updated_at
+ * @property      array<array-key, mixed>|null     $additional_json
+ * @property-read Collection<int, Address>         $addresses
+ * @property-read Agent|null                       $agent
+ * @property-read AgentSoldAppliance|null          $agentSoldAppliance
+ * @property-read Collection<int, AppliancePerson> $appliancePerson
+ * @property-read Country|null                     $citizenship
+ * @property-read Collection<int, Device>          $devices
+ * @property-read bool                             $is_active
+ * @property-read PaymentHistory|null              $latestPayment
+ * @property-read MiniGrid|null                    $miniGrid
+ * @property-read Collection<int, PaymentHistory>  $payments
+ * @property-read PersonDocument|null              $identityDocument
+ * @property-read Collection<int, PersonDocument>  $personDocuments
+ * @property-read Collection<int, PersonDocument>  $uploadedDocuments
+ * @property-read Collection<int, Ticket>          $tickets
  */
-class Person extends BaseModel implements HasAddressesInterface, RoleInterface {
+class Person extends BaseModel implements \Stringable, HasAddressesInterface {
     /** @use HasFactory<PersonFactory> */
     use HasFactory;
     use SoftDeletes;
@@ -56,10 +71,6 @@ class Person extends BaseModel implements HasAddressesInterface, RoleInterface {
     protected $guarded = [];
 
     protected $appends = ['is_active'];
-
-    protected $casts = [
-        'additional_json' => 'array',
-    ];
 
     /** @var array<string, string> */
     protected $dispatchesEvents = [
@@ -71,6 +82,27 @@ class Person extends BaseModel implements HasAddressesInterface, RoleInterface {
      */
     public function tickets(): MorphMany {
         return $this->morphMany(Ticket::class, 'owner');
+    }
+
+    /**
+     * @return BelongsTo<MiniGrid, $this>
+     */
+    public function miniGrid(): BelongsTo {
+        return $this->belongsTo(MiniGrid::class, 'mini_grid_id', 'id');
+    }
+
+    /**
+     * Check if this person is a maintenance user.
+     */
+    public function isMaintenanceUser(): bool {
+        return $this->type === 'maintenance' && $this->mini_grid_id !== null;
+    }
+
+    /**
+     * Check if this person is an agent.
+     */
+    public function isAgent(): bool {
+        return $this->type === 'agent';
     }
 
     public function saveAddress(Address $address): void {
@@ -99,24 +131,10 @@ class Person extends BaseModel implements HasAddressesInterface, RoleInterface {
     }
 
     /**
-     * @return MorphMany<Roles, $this>
-     */
-    public function roleOwner(): MorphMany {
-        return $this->morphMany(Roles::class, 'role_owner');
-    }
-
-    /**
      * @return MorphMany<PaymentHistory, $this>
      */
     public function payments(): MorphMany {
         return $this->morphMany(PaymentHistory::class, 'payer');
-    }
-
-    /**
-     * @return BelongsTo<CustomerGroup, $this>
-     */
-    public function customerGroup(): BelongsTo {
-        return $this->belongsTo(CustomerGroup::class);
     }
 
     /**
@@ -134,10 +152,33 @@ class Person extends BaseModel implements HasAddressesInterface, RoleInterface {
     }
 
     /**
-     * @return HasMany<AssetPerson, $this>
+     * @return HasMany<AppliancePerson, $this>
      */
-    public function assetPerson(): HasMany {
-        return $this->HasMany(AssetPerson::class, 'person_id', 'id');
+    public function appliancePerson(): HasMany {
+        return $this->HasMany(AppliancePerson::class, 'person_id', 'id');
+    }
+
+    /**
+     * @return HasMany<PersonDocument, $this>
+     */
+    public function personDocuments(): HasMany {
+        return $this->hasMany(PersonDocument::class, 'person_id', 'id');
+    }
+
+    /**
+     * @return HasOne<PersonDocument, $this>
+     */
+    public function identityDocument(): HasOne {
+        return $this->hasOne(PersonDocument::class, 'person_id', 'id')
+            ->where('category', PersonDocument::CATEGORY_IDENTITY_RECORD);
+    }
+
+    /**
+     * @return HasMany<PersonDocument, $this>
+     */
+    public function uploadedDocuments(): HasMany {
+        return $this->hasMany(PersonDocument::class, 'person_id', 'id')
+            ->where('category', PersonDocument::CATEGORY_CUSTOMER_UPLOAD);
     }
 
     public function __toString(): string {
@@ -166,14 +207,14 @@ class Person extends BaseModel implements HasAddressesInterface, RoleInterface {
         return $this->id;
     }
 
-    public function getIsActiveAttribute(): bool {
+    protected function getIsActiveAttribute(): bool {
         $lastPayment = $this->latestPayment;
 
         if (!$lastPayment) {
             return false;
         }
 
-        return Carbon::parse($lastPayment->created_at)->diffInDays(now()) <= 25;
+        return (int) Carbon::parse($lastPayment->created_at)->diffInDays(now()) <= 25;
     }
 
     /**
@@ -181,5 +222,11 @@ class Person extends BaseModel implements HasAddressesInterface, RoleInterface {
      */
     public function latestPayment(): HasOne {
         return $this->hasOne(PaymentHistory::class, 'payer_id')->latestOfMany('created_at');
+    }
+
+    protected function casts(): array {
+        return [
+            'additional_json' => 'array',
+        ];
     }
 }

@@ -18,44 +18,53 @@
       :button="true"
       :button-text="$tc('phrases.newShs')"
       :route_name="'/solar-home-systems'"
-      color="green"
+      :show_per_page="true"
+      color="primary"
       @widgetAction="
         () => {
           showAddSolarHomeSystem = true
         }
       "
     >
-      <md-table md-card style="margin-left: 0">
-        <md-table-row>
-          <md-table-head>
-            {{ $tc("phrases.serialNumber") }}
-          </md-table-head>
-          <md-table-head>
-            {{ $tc("words.manufacturer") }}
-          </md-table-head>
-          <md-table-head>{{ $tc("words.name") }}</md-table-head>
-          <md-table-head>{{ $tc("words.owner") }}</md-table-head>
-          <md-table-head>
-            {{ $tc("phrases.lastUpdate") }}
-          </md-table-head>
-        </md-table-row>
+      <md-table
+        v-model="solarHomeSystemService.list"
+        md-card
+        style="margin-left: 0"
+        md-sort="updated_at"
+        md-sort-order="desc"
+        @md-sorted="onSort"
+      >
         <md-table-row
-          v-for="shs in solarHomeSystemService.list"
-          :key="shs.id"
-          @click="navigateToDetails(shs.id)"
+          slot="md-table-row"
+          slot-scope="{ item }"
+          @click="navigateToDetails(item.id)"
           class="cursor-pointer"
         >
-          <md-table-cell>{{ shs.serialNumber }}</md-table-cell>
-          <md-table-cell>{{ shs.manufacturer.name }}</md-table-cell>
-          <md-table-cell>{{ shs.appliance.name }}</md-table-cell>
-          <md-table-cell v-if="shs.device?.person">
-            <router-link :to="`/people/${shs.device.person.id}`">
-              {{ `${shs.device.person.name} ${shs.device.person.surname}` }}
-            </router-link>
+          <md-table-cell
+            :md-label="$tc('phrases.serialNumber')"
+            md-sort-by="serial_number"
+          >
+            {{ item.serialNumber }}
           </md-table-cell>
-          <md-table-cell v-else>-</md-table-cell>
-          <md-table-cell>
-            {{ timeForTimeZone(shs.updatedAt) }}
+          <md-table-cell :md-label="$tc('words.manufacturer')">
+            {{ item.manufacturer ? item.manufacturer.name : "-" }}
+          </md-table-cell>
+          <md-table-cell :md-label="$tc('words.name')">
+            {{ item.appliance ? item.appliance.name : "-" }}
+          </md-table-cell>
+          <md-table-cell :md-label="$tc('words.owner')" md-sort-by="owner">
+            <template v-if="item.device && item.device.person">
+              <router-link :to="`/people/${item.device.person.id}`">
+                {{ `${item.device.person.name} ${item.device.person.surname}` }}
+              </router-link>
+            </template>
+            <template v-else>-</template>
+          </md-table-cell>
+          <md-table-cell
+            :md-label="$tc('phrases.lastUpdate')"
+            md-sort-by="updated_at"
+          >
+            {{ timeForTimeZone(item.updatedAt) }}
           </md-table-cell>
         </md-table-row>
       </md-table>
@@ -64,11 +73,11 @@
 </template>
 
 <script>
-import { SolarHomeSystemService } from "@/services/SolarHomeSystemService"
-import { timing } from "@/mixins"
-import { EventBus } from "@/shared/eventbus"
-import Widget from "@/shared/Widget.vue"
+import { timing } from "@/mixins/timing.js"
 import AddSolarHomeSystemModal from "@/modules/SolarHomeSystem/AddSolarHomeSystemModal.vue"
+import { SolarHomeSystemService } from "@/services/SolarHomeSystemService.js"
+import { EventBus } from "@/shared/eventbus.js"
+import Widget from "@/shared/Widget.vue"
 
 export default {
   name: "SolarHomeSystems",
@@ -79,6 +88,8 @@ export default {
       solarHomeSystemService: new SolarHomeSystemService(),
       subscriber: "solarHomeSystems",
       showAddSolarHomeSystem: false,
+      currentSortBy: "updated_at",
+      currentSortOrder: "desc",
     }
   },
   mounted() {
@@ -103,10 +114,10 @@ export default {
         this.solarHomeSystemService.list.length,
       )
     },
-    updateList(shs) {
+    updateList(createdShs) {
       this.showAddSolarHomeSystem = false
-      const shsList = [...this.solarHomeSystemService.list]
-      shsList.unshift(shs)
+      const createdList = Array.isArray(createdShs) ? createdShs : [createdShs]
+      const shsList = [...createdList, ...this.solarHomeSystemService.list]
       this.solarHomeSystemService.updateList(shsList)
       EventBus.$emit(
         "widgetContentLoaded",
@@ -123,8 +134,28 @@ export default {
     endSearching() {
       this.solarHomeSystemService.showAll()
     },
+    onSort(field) {
+      if (!field) return
+
+      if (this.currentSortBy === field) {
+        this.currentSortOrder =
+          this.currentSortOrder === "desc" ? "asc" : "desc"
+      } else {
+        this.currentSortBy = field
+        this.currentSortOrder = "asc"
+      }
+
+      const prefix = this.currentSortOrder === "desc" ? "-" : ""
+      const term = {
+        page: 1,
+        per_page: this.$route.query.per_page || 15,
+        sort_by: `${prefix}${this.currentSortBy}`,
+      }
+
+      EventBus.$emit("loadPage", this.solarHomeSystemService.paginator, term)
+    },
   },
 }
 </script>
 
-<style scoped></style>
+<style scoped lang="scss"></style>

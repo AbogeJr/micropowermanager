@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Company;
+use App\Services\DatabaseProxyManagerService;
 use App\Services\UserService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -10,7 +11,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use MPM\DatabaseProxy\DatabaseProxyManagerService;
 
 abstract class AbstractJob implements ShouldQueue {
     use Dispatchable;
@@ -25,11 +25,7 @@ abstract class AbstractJob implements ShouldQueue {
     public function __construct(?int $companyId = null) {
         $this->afterCommit = true;
 
-        if ($companyId !== null) {
-            $this->companyId = $companyId;
-        } else {
-            $this->companyId = app()->make(UserService::class)->getCompanyId();
-        }
+        $this->companyId = $companyId ?? app()->make(UserService::class)->getCompanyId();
     }
 
     public function handle(): void {
@@ -40,7 +36,7 @@ abstract class AbstractJob implements ShouldQueue {
     }
 
     public function failed(?\Throwable $t = null): void {
-        if ($t !== null) {
+        if ($t instanceof \Throwable) {
             Log::error(static::class.' failed for company '.$this->companyId, [
                 'message' => $t->getMessage(),
                 'trace' => $t->getTraceAsString(),
@@ -52,12 +48,10 @@ abstract class AbstractJob implements ShouldQueue {
      * Dispatch the job for all tenants.
      *
      * @param mixed ...$args
-     *
-     * @return void
      */
     public static function dispatchForAllTenants(...$args): void {
         foreach (Company::pluck('id') as $companyId) {
-            static::dispatch($companyId, ...$args);
+            dispatch(new (static::class)($companyId, ...$args));
         }
     }
 }

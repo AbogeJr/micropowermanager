@@ -1,7 +1,6 @@
-import { ErrorHandler } from "@/Helpers/ErrorHandler"
-import { convertObjectKeysToSnakeCase } from "@/Helpers/Utils"
-
-import MiniGridRepository from "@/repositories/MiniGridRepository"
+import { ErrorHandler } from "@/Helpers/ErrorHandler.js"
+import { convertObjectKeysToSnakeCase } from "@/Helpers/Utils.js"
+import MiniGridRepository from "@/repositories/MiniGridRepository.js"
 
 export class MiniGridService {
   constructor() {
@@ -34,6 +33,34 @@ export class MiniGridService {
         return new ErrorHandler(error, "http", status)
 
       return data.data
+    } catch (e) {
+      const errorMessage = e.response.data.message
+      return new ErrorHandler(errorMessage, "http")
+    }
+  }
+
+  async updateMiniGrid(miniGridId, miniGridData) {
+    try {
+      const params = convertObjectKeysToSnakeCase(miniGridData)
+      const { data, status, error } = await this.repository.update(
+        miniGridId,
+        params,
+      )
+      if (status !== 200) return new ErrorHandler(error, "http", status)
+
+      return data.data
+    } catch (e) {
+      const errorMessage = e.response.data.message
+      return new ErrorHandler(errorMessage, "http")
+    }
+  }
+
+  async deleteMiniGrid(miniGridId) {
+    try {
+      const { status, error } = await this.repository.delete(miniGridId)
+      if (status !== 200) return new ErrorHandler(error, "http", status)
+
+      return true
     } catch (e) {
       const errorMessage = e.response.data.message
       return new ErrorHandler(errorMessage, "http")

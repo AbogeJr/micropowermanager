@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\AccessRate\AccessRate;
-use App\Models\Address\Address;
 use App\Models\ConnectionGroup;
 use App\Models\ConnectionType;
 use App\Models\Device;
@@ -11,11 +10,11 @@ use App\Models\GeographicalInformation;
 use App\Models\Manufacturer;
 use App\Models\Meter\Meter;
 use App\Models\Meter\MeterConsumption;
-use App\Models\Meter\MeterTariff;
 use App\Models\Meter\MeterType;
 use App\Models\Person\Person;
+use App\Models\Tariff;
+use App\Services\DatabaseProxyManagerService;
 use Illuminate\Database\Seeder;
-use MPM\DatabaseProxy\DatabaseProxyManagerService;
 
 class MeterSeeder extends Seeder {
     public function __construct(
@@ -30,69 +29,27 @@ class MeterSeeder extends Seeder {
      * @return void
      */
     public function run() {
-        // Manufacturer
-        // Create dummy manufacturers for demo purposes
-        $calinSmartManufacturer = Manufacturer::create([
-            'name' => 'Dummy Calin Smart Meter',
-            'type' => 'meter',
-            'website' => 'https://example.com/calin-smart',
-            'contact_person' => 'Demo Person',
-            'api_name' => 'DummyCalinSmartMeterApi',
-        ]);
+        $demoMeterManufacturer = Manufacturer::firstOrCreate(
+            ['api_name' => 'DemoMeterManufacturerApi'],
+            [
+                'name' => 'Demo Meter Manufacturer',
+                'type' => 'meter',
+                'website' => 'https://demo.micropowermanager.io/',
+                'contact_person' => 'Demo Person',
+            ]
+        );
 
-        $kelinManufacturer = Manufacturer::create([
-            'name' => 'Dummy Kelin Meter',
-            'type' => 'meter',
-            'website' => 'https://example.com/kelin',
-            'contact_person' => 'Demo Person',
-            'api_name' => 'DummyKelinMeterApi',
-        ]);
-
-        $manufacturers = collect([$calinSmartManufacturer, $kelinManufacturer]);
-
-        // Connection Group / Connection Type
-        ConnectionType::create(['name' => 'House Hold']);
-        ConnectionType::create(['name' => 'Commercial Usage']);
-        ConnectionType::create(['name' => 'Productive Usage']);
-        ConnectionType::create(['name' => 'Residential']);
-        ConnectionType::create(['name' => 'Business']);
-        ConnectionType::create(['name' => 'Institution']);
-        ConnectionType::create(['name' => 'Not Specified']);
-
-        ConnectionGroup::create(['name' => 'Household']);
-        ConnectionGroup::create(['name' => 'Community']);
-        ConnectionGroup::create(['name' => 'Cafeterias and Pubs']);
-        ConnectionGroup::create(['name' => 'Hair Dressers']);
-        ConnectionGroup::create(['name' => 'Churches & Mosques']);
-        ConnectionGroup::create(['name' => 'Solar Excess']);
-        ConnectionGroup::create(['name' => 'H.H Cus']);
-        ConnectionGroup::create(['name' => 'FOOD AND BEVERAGES']);
-        ConnectionGroup::create(['name' => 'SHOPS w']);
-        ConnectionGroup::create(['name' => 'SCHOOLS']);
-        ConnectionGroup::create(['name' => 'HEALTH CENTRES & INSTITUTIONS']);
-        ConnectionGroup::create(['name' => 'GUEST HOUSES']);
-        ConnectionGroup::create(['name' => 'ENTERTAINMENT CENTRES']);
-        ConnectionGroup::create(['name' => 'Mobile Charging, OFFICES and Stationery']);
-        ConnectionGroup::create(['name' => 'Small scale HATCHERIES']);
-        ConnectionGroup::create(['name' => 'Laundry']);
-        ConnectionGroup::create(['name' => 'Freezing Units']);
-        ConnectionGroup::create(['name' => 'Wood work']);
-        ConnectionGroup::create(['name' => 'Mills']);
-        ConnectionGroup::create(['name' => 'Welders']);
-        ConnectionGroup::create(['name' => 'Drinking Water Project']);
-        ConnectionGroup::create(['name' => 'Bakery']);
-        ConnectionGroup::create(['name' => 'Not ordered yet']);
+        $manufacturers = collect([$demoMeterManufacturer]);
 
         // Tariffs
-        MeterTariff::factory()
+        Tariff::factory()
             ->create([
                 'name' => 'Simple Tariff',
                 'price' => '250',
-                'total_price' => '250',
                 'currency' => 'TZS',
             ]);
 
-        MeterTariff::factory()
+        Tariff::factory()
             ->has(
                 AccessRate::factory()
                     ->state([
@@ -103,7 +60,6 @@ class MeterSeeder extends Seeder {
             ->create([
                 'name' => 'Tariff with monthly Access Rate',
                 'price' => '150',
-                'total_price' => '150',
                 'currency' => 'TZS',
             ]);
 
@@ -139,41 +95,43 @@ class MeterSeeder extends Seeder {
 
         // Assign one meter to each customer
         foreach ($persons as $person) {
-            // Create a Meter
             $meter = Meter::factory()
                 ->for(ConnectionType::all()->random())
                 ->for(ConnectionGroup::all()->random())
                 ->for(MeterType::all()->random())
                 ->for($manufacturers->random())
-                ->for(MeterTariff::all()->random(), 'tariff')
-                ->createOne();
+                ->for(Tariff::all()->random(), 'tariff')
+                ->createOne(['in_use' => 1]);
 
             // Assign the Meter to the customer by creating a device
-            $device = Device::factory()
+            Device::factory()
                 ->for($person)
                 ->for($meter, 'device')
                 ->has(
-                    Address::factory()
-                        ->for($person->addresses->first()->city)
-                        ->has(
-                            GeographicalInformation::factory()
-                                // Remove this after Laravel 12 upgrade, see
-                                // https://github.com/larastan/larastan/issues/2307
-                                // @phpstan-ignore-next-line
-                                ->state(function (array $attributes, Address $address) {
-                                    /** @var Device $device */
-                                    $device = $address->owner()->first();
-
-                                    return ['points' => $device->person->addresses->first()->geo->points];
-                                })
-                                ->randomizePointsInHousehold(),
-                            'geo'
-                        )
+                    GeographicalInformation::factory()
+                        // https://github.com/larastan/larastan/issues/2307
+                        // @phpstan-ignore argument.type
+                        ->state(function (array $attributes, Device $device) {
+                            return ['points' => $device->person->addresses->first()->geo->points];
+                        })
+                        ->randomizePointsInHousehold(),
+                    'geo'
                 )
                 ->createOne([
                     'device_serial' => $meter->serial_number,
                 ]);
             $this->generateMeterConsumptionData($meter);
+        }
+
+        foreach (MeterType::all() as $meterType) {
+            Meter::factory()
+                ->count(5)
+                ->for(ConnectionType::all()->random())
+                ->for(ConnectionGroup::all()->random())
+                ->for($meterType)
+                ->for($demoMeterManufacturer)
+                ->for(Tariff::all()->random(), 'tariff')
+                ->create(['in_use' => 0]);
         }
     }
 
@@ -191,7 +149,5 @@ class MeterSeeder extends Seeder {
             'consumption' => $consumption,
             'credit_on_meter' => $creditOnMeter,
         ]);
-
-        echo "Created meter consumption data for meter ID: {$meterId}\n";
     }
 }

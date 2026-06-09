@@ -7,8 +7,6 @@ use Illuminate\Foundation\Http\FormRequest;
 class MeterTypeCreateRequest extends FormRequest {
     /**
      * Determine if the user is authorized to make this request.
-     *
-     * @return bool
      */
     public function authorize(): bool {
         return true;
@@ -21,9 +19,9 @@ class MeterTypeCreateRequest extends FormRequest {
      */
     public function rules(): array {
         return [
-            'max_current' => 'required|numeric|min:1',
-            'phase' => 'required|numeric|min:1',
-            'online' => 'required',
+            'max_current' => ['required', 'numeric', 'min:1'],
+            'phase' => ['required', 'numeric', 'min:1'],
+            'online' => ['required'],
         ];
     }
 }

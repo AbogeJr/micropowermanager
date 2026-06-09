@@ -3,96 +3,51 @@
 namespace App\Sms\Senders;
 
 use App\Exceptions\MissingSmsReferencesException;
-use App\Models\AssetRate;
-use App\Models\MpmPlugin;
-use App\Models\Plugins;
+use App\Exceptions\SmsRecordNotFoundException;
+use App\Models\ApplianceRate;
 use App\Models\Sms;
 use App\Models\Transaction\Transaction;
-use App\Services\PluginsService;
-use App\Sms\AndroidGateway;
+use App\Services\SmsGatewayResolverService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\Log;
-use Inensus\AfricasTalking\AfricasTalkingGateway;
-use Inensus\ViberMessaging\Services\ViberContactService;
-use Inensus\ViberMessaging\ViberGateway;
 
 abstract class SmsSender {
-    public const VIBER_GATEWAY = 'ViberGateway';
-    public const AFRICAS_TALKING_GATEWAY = 'AfricasTalkingGateway';
-    public const DEFAULT_GATEWAY = 'AndroidGateway';
-
-    public const SMS_GATE_WAY_IDS = [
-        self::VIBER_GATEWAY => MpmPlugin::VIBER_MESSAGING,
-        self::AFRICAS_TALKING_GATEWAY => MpmPlugin::AFRICAS_TALKING,
-        self::DEFAULT_GATEWAY => 2,
-    ];
-
-    protected mixed $smsBodyService;
-    protected mixed $data;
-
     /** @var array<string, string>|null */
-    protected ?array $references;
+    protected ?array $references = null;
     public string $body = '';
-    protected ?string $receiver;
-    protected ?string $callback;
-    protected string $parserSubPath;
-    private mixed $smsAndroidSettings;
-    private ?string $viberIdOfReceiver;
+    protected ?string $receiver = null;
+    protected ?string $callback = null;
 
-    public function __construct(
-        mixed $data,
-        mixed $smsBodyService,
-        string $parserSubPath,
-        mixed $smsAndroidSettings,
-    ) {
-        $this->smsBodyService = $smsBodyService;
-        $this->data = $data;
-        $this->parserSubPath = $parserSubPath;
-        $this->smsAndroidSettings = $smsAndroidSettings;
-    }
+    public function __construct(protected mixed $data, protected mixed $smsBodyService, protected string $parserSubPath, private mixed $smsAndroidSettings) {}
 
     public function sendSms(): void {
-        $gateway = $this->determineGateway();
+        $gatewayResolver = app()->make(SmsGatewayResolverService::class);
+
+        [$gateway, $viberId] = $gatewayResolver->determineGateway($this->receiver);
+
         $lastRecordedSMS = Sms::query()
             ->where('receiver', $this->receiver)
-            ->orWhere('receiver', ltrim($this->receiver, '+'))
-            ->where(
-                'body',
-                $this->body
-            )->latest()->first();
+            ->where('body', $this->body)
+            ->latest()->first();
 
-        switch ($gateway) {
-            case self::VIBER_GATEWAY:
-                resolve(ViberGateway::class)
-                    ->sendSms(
-                        $this->body,
-                        $this->viberIdOfReceiver,
-                        $lastRecordedSMS
-                    );
-                $lastRecordedSMS->gateway_id = self::SMS_GATE_WAY_IDS[self::VIBER_GATEWAY];
-                $lastRecordedSMS->save();
-                break;
+        if ($lastRecordedSMS == null) {
+            throw new SmsRecordNotFoundException('No record of the SMS to be sent to the receiver '.$this->receiver.' was found');
+        }
 
-            case self::AFRICAS_TALKING_GATEWAY:
-                resolve(AfricasTalkingGateway::class)
-                    ->sendSms(
-                        $this->body,
-                        $this->receiver,
-                        $lastRecordedSMS
-                    );
-                $lastRecordedSMS->gateway_id = self::SMS_GATE_WAY_IDS[self::AFRICAS_TALKING_GATEWAY];
-                $lastRecordedSMS->save();
-                break;
+        $resolved = $gatewayResolver->resolveGatewayAndArgs($gateway, $lastRecordedSMS, [
+            'body' => $this->body,
+            'receiver' => $this->receiver,
+            'viberId' => $viberId,
+            'callback' => $this->callback,
+            'smsAndroidSettings' => $this->smsAndroidSettings,
+        ]);
 
-            default:
-                resolve(AndroidGateway::class)
-                    ->sendSms(
-                        $this->receiver,
-                        $this->body,
-                        $this->callback,
-                        $this->smsAndroidSettings
-                    );
-                break;
+        $resolved['gateway']->sendSms(...$resolved['args']);
+
+        if ($gateway !== SmsGatewayResolverService::DEFAULT_GATEWAY) {
+            $lastRecordedSMS->gateway_id = $resolved['gatewayId'];
+            $lastRecordedSMS->save();
         }
     }
 
@@ -145,7 +100,7 @@ abstract class SmsSender {
     private function getSmsBody(string $reference): mixed {
         try {
             $smsBody = $this->smsBodyService->getSmsBodyByReference($this->references[$reference]);
-        } catch (ModelNotFoundException $e) {
+        } catch (ModelNotFoundException) {
             throw new MissingSmsReferencesException($reference.' SMS body record not found in database');
         }
 
@@ -153,47 +108,33 @@ abstract class SmsSender {
     }
 
     public function validateReferences(): void {
-        if (($this->data instanceof Transaction) || ($this->data instanceof AssetRate)) {
+        if (($this->data instanceof Transaction) || ($this->data instanceof ApplianceRate)) {
             $nullSmsBodies = $this->smsBodyService->getNullBodies();
-            if (count($nullSmsBodies)) {
+            if (count($nullSmsBodies) > 0) {
                 Log::critical('Send sms rejected, some of sms bodies are null', ['Sms Bodies' => $nullSmsBodies]);
                 throw new MissingSmsReferencesException('Send sms rejected, some of sms bodies are null');
             }
         }
-        try {
-            if (array_key_exists('header', $this->references)) {
-                $this->prepareHeader();
-            }
-            if (array_key_exists('body', $this->references)) {
-                $this->prepareBody();
-            }
-            if (array_key_exists('footer', $this->references)) {
-                $this->prepareFooter();
-            }
-        } catch (MissingSmsReferencesException $exception) {
-            throw $exception;
+        if (array_key_exists('header', $this->references)) {
+            $this->prepareHeader();
+        }
+        if (array_key_exists('body', $this->references)) {
+            $this->prepareBody();
+        }
+        if (array_key_exists('footer', $this->references)) {
+            $this->prepareFooter();
         }
     }
 
     public function getReceiver(): string {
         if ($this->data instanceof Transaction) {
-            $this->receiver = strpos($this->data->sender, '+') === 0 ? $this->data->sender : '+'.$this->data->sender;
-        } elseif ($this->data instanceof AssetRate) {
-            $this->receiver = strpos(
-                $this->data->assetPerson->person->addresses->first()->phone,
-                '+'
-            ) === 0 ? $this->data->assetPerson->person->addresses->first()->phone
-                : '+'.$this->data->assetPerson->person->addresses->first()->phone;
+            $this->receiver = phone($this->data->sender)->formatE164();
+        } elseif ($this->data instanceof ApplianceRate) {
+            $this->receiver = $this->data->appliancePerson->person->addresses->first()->phone;
         } elseif (!is_array($this->data) && $this->data->mpmPerson) {
-            $this->receiver = strpos(
-                $this->data->mpmPerson->addresses[0]->phone,
-                '+'
-            ) === 0 ? $this->data->mpmPerson->addresses[0]->phone : '+'.$this->data->mpmPerson->addresses[0]->phone;
+            $this->receiver = $this->data->mpmPerson->addresses[0]->phone;
         } else {
-            $this->receiver = strpos(
-                $this->data['phone'],
-                '+'
-            ) === 0 ? $this->data['phone'] : '+'.$this->data['phone'];
+            $this->receiver = phone($this->data['phone'])->formatE164();
         }
 
         return $this->receiver;
@@ -203,29 +144,11 @@ abstract class SmsSender {
         $this->callback = sprintf($callback, $uuid);
     }
 
-    private function determineGateway(): string {
-        $pluginsService = app()->make(PluginsService::class);
-        $africasTalkingPlugin = $pluginsService->getByMpmPluginId(MpmPlugin::AFRICAS_TALKING);
-        $gateway = self::DEFAULT_GATEWAY;
-
-        if ($africasTalkingPlugin && $africasTalkingPlugin->status == Plugins::ACTIVE) {
-            $gateway = self::AFRICAS_TALKING_GATEWAY;
-        }
-
-        $viberMessagingPlugin = $pluginsService->getByMpmPluginId(MpmPlugin::VIBER_MESSAGING);
-
-        if ($viberMessagingPlugin && $viberMessagingPlugin->status == Plugins::ACTIVE) {
-            $viberContactService = app()->make(ViberContactService::class);
-            $viberContact = $viberContactService->getByReceiverPhoneNumber($this->receiver);
-
-            if (!$viberContact) {
-                return $gateway;
-            }
-
-            $this->viberIdOfReceiver = $viberContact->viber_id;
-            $gateway = self::VIBER_GATEWAY;
-        }
-
-        return $gateway;
+    /**
+     * Optional model to associate the created Sms with (e.g. for deduplication).
+     * Override in senders that trigger per-entity SMS (e.g. TransactionConfirmation).
+     */
+    public function getTriggerModel(): ?Model {
+        return null;
     }
 }

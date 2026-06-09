@@ -39,10 +39,10 @@
                       {{ $tc("words.profile") }}
                     </router-link>
                   </md-menu-item>
-                  <md-menu-item>
+                  <md-menu-item v-if="canManageUsers">
                     <router-link
                       :to="{
-                        path: '/profile/management',
+                        path: '/settings/user-management',
                       }"
                       class="link"
                     >
@@ -67,6 +67,8 @@
 </template>
 
 <script>
+import { mapGetters } from "vuex"
+
 export default {
   data() {
     return {
@@ -74,9 +76,19 @@ export default {
       toggleCard: false,
     }
   },
+  computed: {
+    ...mapGetters({
+      userPermissions: "auth/getPermissions",
+    }),
+    canManageUsers() {
+      return this.userPermissions.includes("users")
+    },
+  },
   methods: {
     logout() {
-      this.$router.replace("/login")
+      this.$store.dispatch("auth/logOut").then(() => {
+        this.$router.replace("/login")
+      })
     },
     toggle() {
       this.toggleCard = !this.toggleCard
@@ -85,7 +97,7 @@ export default {
 }
 </script>
 
-<style lang="css" scoped>
+<style scoped lang="scss">
 .site-header .navbar {
   padding: 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.04);

@@ -24,16 +24,10 @@ class MeterController extends Controller {
      *
      * @urlParam     page int
      * @urlParam     in_use int to list wether used or all meters
-     *
-     * @responseFile responses/meters/meters.list.json
-     *
-     * @param Request $request
-     *
-     * @return ApiResource
      */
     public function index(Request $request): ApiResource {
         $inUse = $request->input('in_use');
-        $limit = $request->input('limit', config('settings.paginate'));
+        $limit = $request->input('limit', 15);
 
         return ApiResource::make($this->meterService->getAll($limit, $inUse));
     }
@@ -41,8 +35,6 @@ class MeterController extends Controller {
     /**
      * Create
      * Stores a new meter.
-     *
-     * @param MeterRequest $request
      *
      * @bodyParam serial_number string required
      * @bodyParam meter_type_id int required
@@ -61,19 +53,13 @@ class MeterController extends Controller {
     /**
      * Detail
      * Detailed meter with following relations
-     * - MeterTariff.tariff
+     * - Tariff.tariff
      * - Meter Type
      * - Meter.connectionType
      * - Meter.connectionGroup
      * - Manufacturer.
      *
      * @urlParam serialNumber string
-     *
-     * @param string $serialNumber
-     *
-     * @return ApiResource
-     *
-     * @responseFile responses/meters/meter.detail.json
      */
     public function show(string $serialNumber): ApiResource {
         return ApiResource::make($this->meterService->getBySerialNumber($serialNumber));
@@ -86,10 +72,6 @@ class MeterController extends Controller {
      * - Serial number.
      *
      * @bodyParam term string required
-     *
-     * @return ApiResource
-     *
-     * @responseFile responses/meters/meters.search.json
      */
     public function search(): ApiResource {
         $term = request('term');
@@ -103,10 +85,6 @@ class MeterController extends Controller {
      * Deletes the meter with its all releations.
      *
      * @urlParam meterId. The ID of the meter to be delete
-     *
-     * @param $meterId
-     *
-     * @return JsonResponse
      */
     public function destroy(int $meterId): JsonResponse {
         $this->meterService->getById($meterId);

@@ -2,7 +2,7 @@
   <div>
     <div class="md-layout md-gutter">
       <div
-        class="md-layout-item md-size-25 md-small-size-50 md-xsmall-size-100"
+        class="md-layout-item md-size-20 md-small-size-50 md-xsmall-size-100"
       >
         <box
           :box-color="'blue'"
@@ -13,7 +13,7 @@
         />
       </div>
       <div
-        class="md-layout-item md-size-25 md-small-size-50 md-xsmall-size-100"
+        class="md-layout-item md-size-20 md-small-size-50 md-xsmall-size-100"
       >
         <box
           :box-color="'orange'"
@@ -24,7 +24,7 @@
         />
       </div>
       <div
-        class="md-layout-item md-size-25 md-small-size-50 md-xsmall-size-100"
+        class="md-layout-item md-size-20 md-small-size-50 md-xsmall-size-100"
       >
         <box
           :box-color="'red'"
@@ -35,7 +35,18 @@
         />
       </div>
       <div
-        class="md-layout-item md-size-25 md-small-size-50 md-xsmall-size-100"
+        class="md-layout-item md-size-20 md-small-size-50 md-xsmall-size-100"
+      >
+        <box
+          :box-color="'purple'"
+          :center-text="true"
+          :header-text="$tc('phrases.soldAppliances')"
+          :sub-text="readable(soldAppliances).toString()"
+          :box-icon="'shopping_cart'"
+        />
+      </div>
+      <div
+        class="md-layout-item md-size-20 md-small-size-50 md-xsmall-size-100"
       >
         <box
           :box-color="'green'"
@@ -58,8 +69,8 @@
 </template>
 
 <script>
+import { currency } from "@/mixins/currency.js"
 import Box from "@/shared/Box.vue"
-import { currency } from "@/mixins/currency"
 
 export default {
   name: "BoxGroup",
@@ -95,6 +106,13 @@ export default {
       }
       return revenue
     },
+    soldAppliances() {
+      let count = 0
+      for (let c in this.clusters) {
+        count += this.clusters[c].applianceCount || 0
+      }
+      return count
+    },
   },
   methods: {
     newCluster() {
@@ -104,7 +122,7 @@ export default {
 }
 </script>
 
-<style>
+<style scoped lang="scss">
 .box-group {
   display: flex;
   margin-top: 1rem;

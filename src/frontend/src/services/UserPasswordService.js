@@ -1,5 +1,5 @@
-import { ErrorHandler } from "@/Helpers/ErrorHandler"
-import UserPasswordRepository from "@/repositories/UserPasswordRepository"
+import { ErrorHandler } from "@/Helpers/ErrorHandler.js"
+import UserPasswordRepository from "@/repositories/UserPasswordRepository.js"
 
 export class UserPasswordService {
   constructor() {
@@ -50,6 +50,42 @@ export class UserPasswordService {
         "http",
         e.response.data.data.status_code,
       )
+    }
+  }
+
+  async validateToken(token) {
+    try {
+      const { status, data } = await this.repository.validateToken(token)
+      if (status !== 200) {
+        return new ErrorHandler("Invalid or expired token", "http", status)
+      }
+      return data.data
+    } catch (e) {
+      const errorMessage =
+        e.response?.data?.data?.message ||
+        e.response?.data?.message ||
+        "Invalid or expired token"
+      return new ErrorHandler(errorMessage, "http", e.response?.status)
+    }
+  }
+
+  async confirmReset(token, password, passwordConfirmation) {
+    try {
+      const { status, data } = await this.repository.confirmReset({
+        token,
+        password,
+        password_confirmation: passwordConfirmation,
+      })
+      if (status !== 200) {
+        return new ErrorHandler("Failed", "http", status)
+      }
+      return data.data
+    } catch (e) {
+      const errorMessage =
+        e.response?.data?.data?.message ||
+        e.response?.data?.message ||
+        "Failed to reset password"
+      return new ErrorHandler(errorMessage, "http", e.response?.status)
     }
   }
   resetUserPassword() {

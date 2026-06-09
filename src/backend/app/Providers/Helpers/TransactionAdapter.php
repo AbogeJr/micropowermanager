@@ -1,0 +1,63 @@
+<?php
+
+namespace App\Providers\Helpers;
+
+use App\Models\Transaction\AgentTransaction;
+use App\Models\Transaction\BasePaymentProviderTransaction;
+use App\Plugins\PaystackPaymentProvider\Models\PaystackTransaction;
+use App\Plugins\PaystackPaymentProvider\Providers\PaystackTransactionProvider;
+use App\Plugins\SmsTransactionParser\Models\SmsTransaction;
+use App\Plugins\SmsTransactionParser\Providers\SmsTransactionProvider;
+use App\Plugins\SwiftaPaymentProvider\Models\SwiftaTransaction;
+use App\Plugins\SwiftaPaymentProvider\Providers\SwiftaTransactionProvider;
+use App\Plugins\WavecomPaymentProvider\Models\WaveComTransaction;
+use App\Plugins\WavecomPaymentProvider\Providers\WaveComTransactionProvider;
+use App\Plugins\WaveMoneyPaymentProvider\Models\WaveMoneyTransaction;
+use App\Plugins\WaveMoneyPaymentProvider\Providers\WaveMoneyTransactionProvider;
+use App\Providers\AgentTransactionProvider;
+use App\Providers\Interfaces\ITransactionProvider;
+use Inensus\SafaricomMobileMoney\Models\SafaricomTransaction;
+use Inensus\SafaricomMobileMoney\Providers\SafaricomMobileMoneyTransactionProvider;
+
+class TransactionAdapter {
+    public static function getTransaction(BasePaymentProviderTransaction $transactionProvider): ?ITransactionProvider {
+        if ($transactionProvider instanceof AgentTransaction) {
+            $baseTransaction = resolve(AgentTransactionProvider::class);
+            $baseTransaction->init($transactionProvider);
+
+            return $baseTransaction;
+        } elseif ($transactionProvider instanceof WaveMoneyTransaction) {
+            $baseTransaction = resolve(WaveMoneyTransactionProvider::class);
+            $baseTransaction->init($transactionProvider);
+
+            return $baseTransaction;
+        } elseif ($transactionProvider instanceof SwiftaTransaction) {
+            $baseTransaction = resolve(SwiftaTransactionProvider::class);
+            $baseTransaction->init($transactionProvider);
+
+            return $baseTransaction;
+        } elseif ($transactionProvider instanceof PaystackTransaction) {
+            $baseTransaction = resolve(PaystackTransactionProvider::class);
+            $baseTransaction->init($transactionProvider);
+
+            return $baseTransaction;
+        } elseif ($transactionProvider instanceof WaveComTransaction) {
+            $baseTransaction = resolve(WaveComTransactionProvider::class);
+            $baseTransaction->init($transactionProvider);
+
+            return $baseTransaction;
+        } elseif ($transactionProvider instanceof SmsTransaction) {
+            $baseTransaction = resolve(SmsTransactionProvider::class);
+            $baseTransaction->init($transactionProvider);
+
+            return $baseTransaction;
+        } elseif ($transactionProvider instanceof SafaricomTransaction) {
+            $baseTransaction = resolve(SafaricomMobileMoneyTransactionProvider::class);
+            $baseTransaction->init($transactionProvider);
+
+            return $baseTransaction;
+        }
+
+        return null;
+    }
+}

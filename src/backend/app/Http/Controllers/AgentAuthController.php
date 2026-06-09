@@ -2,30 +2,29 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Agent;
+use App\Models\MainSettings;
 use App\Services\AgentService;
+use App\Services\MainSettingsService;
+use App\Utils\DemoCompany;
+use Dedoc\Scramble\Attributes\BodyParameter;
+use Dedoc\Scramble\Attributes\Group;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Tymon\JWTAuth\JWTGuard;
 
-/**
- * @group   Agent-Authenticator
- * Class AgentAuthController
- * Responsible for AgentAPP-API-Call authentications.
- */
+#[Group('AgentApp - Auth', 'Responsible for AgentAPP-API-Call authentications.', weight: 20)]
 class AgentAuthController extends Controller {
     /**
      * Create a new AuthController instance.
-     *
-     * @param AgentService $agentService
      */
-    public function __construct(private AgentService $agentService) {
-        $this->middleware('auth:agent_api', ['except' => ['login']]);
-    }
+    public function __construct(
+        private AgentService $agentService,
+        private MainSettingsService $mainSettingsService,
+    ) {}
 
     /**
      * Get the JWT authentication guard.
-     *
-     * @return JWTGuard
      */
     protected function guard(): JWTGuard {
         /** @var JWTGuard $guard */
@@ -35,14 +34,16 @@ class AgentAuthController extends Controller {
     }
 
     /**
-     * Get JWT via given credentials.
+     * Agent login.
+     *
+     * Login a user of the Agent App and get JWT token via given credentials.
      *
      * @bodyParam email string required
      * @bodyParam password string required
-     *
-     * @return JsonResponse
      */
-    public function login(Request $request) {
+    #[BodyParameter('email', type: 'string', format: 'email', example: DemoCompany::DEMO_COMPANY_AGENT_EMAIL)]
+    #[BodyParameter('password', type: 'string', format: 'password', example: DemoCompany::DEMO_COMPANY_PASSWORD)]
+    public function login(Request $request): JsonResponse {
         $credentials = $request->only(['email', 'password']);
 
         if (!$token = $this->guard()->setTTL(525600)->attempt($credentials)) {
@@ -62,27 +63,49 @@ class AgentAuthController extends Controller {
     }
 
     /**
-     * Get the authenticated User.
-     *
-     * @return JsonResponse
+     * Get the authenticated Agent.
      */
-    public function me() {
-        return response()->json(auth('agent_api')->user());
+    public function me(): JsonResponse {
+        $agent = auth('agent_api')->user();
+
+        if (method_exists($agent, 'getRoleNames')) {
+            /** @var Agent $agent */
+            $roles = $agent->getRoleNames()->toArray();
+        } else {
+            $roles = [];
+        }
+        if (method_exists($agent, 'getAllPermissions')) {
+            /** @var Agent $agent */
+            $permissions = $agent->getAllPermissions()->pluck('name')->toArray();
+        } else {
+            $permissions = [];
+        }
+
+        $agent = $this->agentService->getById($agent->id);
+
+        return response()->json([
+            /* @var Agent */
+            'agent' => $agent,
+            'roles' => $roles,
+            'permissions' => $permissions,
+            'settings' => $this->mainSettings(),
+        ]);
     }
 
     /**
-     * Log the user out (Invalidate the token).
+     * Agent logout.
      *
-     * @return JsonResponse
+     * Logout the AgentApp user and invalidate the JWT token.
      */
-    public function logout() {
+    public function logout(): JsonResponse {
         auth('agent_api')->logout();
 
         return response()->json(['message' => 'Successfully logged out']);
     }
 
     /**
-     * Refresh a token.
+     * Refresh Agent token.
+     *
      * A valid JWT token has to be sent to refresh the token.
      *
      * @return JsonResponse
@@ -99,13 +122,36 @@ class AgentAuthController extends Controller {
      * @return JsonResponse
      */
     protected function respondWithToken($token) {
-        return response()->json(
-            [
-                'access_token' => $token,
-                'token_type' => 'bearer',
-                'expires_in' => $this->guard()->factory()->getTTL() * 60,
-                'agent' => $this->guard()->user(),
-            ]
-        );
+        /** @var Agent $agent */
+        $agent = $this->guard()->user();
+        $roles = $agent->getRoleNames()->toArray();
+        $permissions = $agent->getAllPermissions()->pluck('name')->toArray();
+
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => $this->guard()->factory()->getTTL() * 60,
+            'agent' => $agent,
+            'roles' => $roles,
+            'permissions' => $permissions,
+            'settings' => $this->mainSettings(),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function mainSettings(): ?array {
+        $settings = $this->mainSettingsService->getAll()->first();
+        if (!$settings instanceof MainSettings) {
+            return null;
+        }
+
+        return [
+            'currency' => $settings->currency,
+            'country' => $settings->country,
+            'language' => $settings->language,
+            'company_name' => $settings->company_name,
+        ];
     }
 }

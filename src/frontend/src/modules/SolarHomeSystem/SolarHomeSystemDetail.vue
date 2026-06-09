@@ -2,7 +2,11 @@
   <div class="page-container">
     <div class="md-layout md-gutter">
       <div class="md-layout-item md-size-50 md-small-size-100">
-        <basic-details :shs="shs" @widget-loaded="handleWidgetLoaded" />
+        <basic-details
+          :shs="shs"
+          @widget-loaded="handleWidgetLoaded"
+          @updated="getSolarHomeSystem"
+        />
       </div>
 
       <div
@@ -27,7 +31,7 @@
       </div>
     </div>
 
-    <div class="md-layout md-gutter">
+    <div class="md-layout md-gutter" v-if="$can('transactions')">
       <div class="md-layout-item md-size-100">
         <transactions
           :transactions="transactions"
@@ -40,15 +44,16 @@
 
 <script>
 import BasicDetails from "./BasicDetails.vue"
-import Owner from "./Owner.vue"
 import Location from "./Location.vue"
+import Owner from "./Owner.vue"
 import Transactions from "./Transactions.vue"
+
+import { notify } from "@/mixins/notify.js"
 import {
   SolarHomeSystemService,
   Transactions as TransactionsService,
-} from "@/services/SolarHomeSystemService"
-import { notify } from "@/mixins"
-import { EventBus } from "@/shared/eventbus"
+} from "@/services/SolarHomeSystemService.js"
+import { EventBus } from "@/shared/eventbus.js"
 
 export default {
   name: "SolarHomeSystemDetail",
@@ -78,7 +83,11 @@ export default {
       return this.shs.device && this.shs.device.person
     },
     hasAddressData() {
-      return this.shs.device && this.shs.device.address
+      return (
+        this.shs.device &&
+        this.shs.device.person &&
+        this.shs.device.person.addresses
+      )
     },
   },
   created() {
@@ -99,7 +108,7 @@ export default {
       }
     },
     loadTransactions() {
-      if (this.transactions && this.transactions.paginator) {
+      if (!this.transactions && !this.transactions.paginator) {
         EventBus.$emit("loadPage", this.transactions.paginator)
       }
     },
@@ -125,7 +134,7 @@ export default {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .page-container {
   padding: 16px;
 }

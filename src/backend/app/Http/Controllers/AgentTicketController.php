@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\TicketOwnerNotFoundException;
 use App\Http\Requests\CreateAgentTicketRequest;
 use App\Http\Resources\ApiResource;
+use App\Http\Resources\TicketResource;
 use App\Services\AgentService;
 use App\Services\AgentTicketService;
 use App\Services\PersonService;
 use App\Services\PersonTicketService;
+use App\Services\TicketService;
 use Illuminate\Http\Request;
-use Inensus\Ticket\Exceptions\TicketOwnerNotFoundException;
-use Inensus\Ticket\Http\Resources\TicketResource;
-use Inensus\Ticket\Services\TicketService;
 
 class AgentTicketController extends Controller {
     public function __construct(
@@ -45,7 +45,7 @@ class AgentTicketController extends Controller {
 
         try {
             $owner = $this->personService->getById($ownerId);
-        } catch (TicketOwnerNotFoundException $e) {
+        } catch (TicketOwnerNotFoundException) {
             throw new TicketOwnerNotFoundException('Ticket owner with following id not found '.$ownerId);
         }
 
@@ -70,6 +70,8 @@ class AgentTicketController extends Controller {
         $this->personTicketService->assign();
         $this->ticketService->save($ticket);
 
-        return TicketResource::make($this->ticketService->getBatch([$ticket]));
+        $tickets = $this->ticketService->getBatch([$ticket]);
+
+        return TicketResource::make($tickets);
     }
 }

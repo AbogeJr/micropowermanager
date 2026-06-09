@@ -4,18 +4,15 @@ namespace Database\Seeders;
 
 use App\Models\Address\Address;
 use App\Models\GeographicalInformation;
-use App\Models\MaintenanceUsers;
 use App\Models\MiniGrid;
 use App\Models\Person\Person;
+use App\Models\Ticket\Ticket;
+use App\Models\Ticket\TicketCategory;
+use App\Models\Ticket\TicketOutsource;
+use App\Models\Ticket\TicketUser;
 use App\Models\User;
-use Illuminate\Console\View\Components\Info;
+use App\Services\DatabaseProxyManagerService;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-use Inensus\Ticket\Models\Ticket;
-use Inensus\Ticket\Models\TicketCategory;
-use Inensus\Ticket\Models\TicketOutsource;
-use Inensus\Ticket\Models\TicketUser;
-use MPM\DatabaseProxy\DatabaseProxyManagerService;
 
 class TicketSeeder extends Seeder {
     public function __construct(
@@ -32,10 +29,6 @@ class TicketSeeder extends Seeder {
      * @return void
      */
     public function run() {
-        (new Info($this->command->getOutput()))->render(
-            "Running TransactionSeeder to generate $this->amount tickets. This may take some time."
-        );
-
         // Create Ticket categories
         TicketCategory::factory()
             ->count(12)
@@ -119,9 +112,8 @@ class TicketSeeder extends Seeder {
                         ->for($village)
                         ->has(
                             GeographicalInformation::factory()
-                                // Remove this after Laravel 12 upgrade, see
                                 // https://github.com/larastan/larastan/issues/2307
-                                // @phpstan-ignore-next-line
+                                // @phpstan-ignore argument.type
                                 ->state(function (array $attributes, Address $address) {
                                     return ['points' => $address->city->location->points];
                                 })
@@ -131,11 +123,10 @@ class TicketSeeder extends Seeder {
                 )
                 ->create();
 
-            // Make the person a Maintenance User
-            $maintenanceUser = MaintenanceUsers::factory()
-                ->for($minigrid)
-                ->for($person)
-                ->create();
+            // Make the person a Maintenance User by setting type and mini_grid_id
+            $person->type = 'maintenance';
+            $person->mini_grid_id = $minigrid->id;
+            $person->save();
 
             // Find the MiniGrid's Agents and make them all Maintenance Users
             $agents = $minigrid->agents()->get();
@@ -144,36 +135,34 @@ class TicketSeeder extends Seeder {
                 $agentPerson = $agent->person()->first();
 
                 if ($agentPerson) {
-                    $maintenanceUserAgent = MaintenanceUsers::factory()
-                        ->for($minigrid)
-                        ->for($agentPerson)
-                        ->create();
+                    // Set the agent person type to 'agent' (not maintenance)
+                    $agentPerson->type = 'agent';
+                    $agentPerson->save();
                 }
             }
         }
 
         // Seed tickets
-        for ($i = 1; $i <= $this->amount; ++$i) {
-            try {
-                DB::connection('tenant')->beginTransaction();
-                $this->generateTicket();
-                DB::connection('tenant')->commit();
-            } catch (\Exception $e) {
-                DB::connection('tenant')->rollBack();
-                echo $e->getMessage();
-            }
-        }
+        $this->command->outputComponents()->info(
+            "Running TicketSeeder to generate $this->amount tickets. This may take some time."
+        );
+
+        $this->command->withProgressBar(
+            range(1, $this->amount),
+            fn () => $this->generateTicket()
+        );
+        $this->command->newLine(2);
     }
 
     private function generateTicket(): void {
-        $randomCategory = TicketCategory::factory()->createOne();
+        $randomCategory = TicketCategory::inRandomOrder()->first();
         $fakeSentence = $this->generateFakeSentence();
         $randomCreator = User::query()->inRandomOrder()->first();
         $demoDate = date('Y-m-d', strtotime('-'.mt_rand(0, 365).' days'));
         $ticketUser = TicketUser::factory()->createOne();
-        $randomMaintenanceUser = MaintenanceUsers::query()->inRandomOrder()->first();
+        $randomMaintenanceUser = Person::query()->inRandomOrder()->where('type', 'maintenance')->first();
         $randomUser = User::query()->inRandomOrder()->first();
-        $randomPerson = Person::query()->inRandomOrder()->where('is_customer', 1)->first();
+        $randomPerson = Person::query()->inRandomOrder()->where('type', 'customer')->first();
         $dueDate = date('Y-m-d', strtotime('+3 days', strtotime($demoDate)));
         $status = rand(0, 1);
 
@@ -192,7 +181,7 @@ class TicketSeeder extends Seeder {
         if ($randomCategory->out_source) {
             $ticket->assigned_id = $randomUser->id;
             $ticket->owner_id = $randomMaintenanceUser->id;
-            $ticket->owner_type = 'maintenance_user';
+            $ticket->owner_type = 'person';
             $ticket->save();
             try {
                 $amount = random_int(10, 200);
@@ -205,7 +194,6 @@ class TicketSeeder extends Seeder {
                 'created_at' => $demoDate,
                 'updated_at' => $demoDate,
             ]);
-            $randomCategory->out_source = $ticketOutsource->id;
             $randomCategory->save();
         } else {
             $ticket->assigned_id = $ticketUser->id;

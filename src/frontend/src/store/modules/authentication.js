@@ -1,4 +1,4 @@
-import { AuthenticationService } from "@/services/AuthenticationService"
+import { AuthenticationService } from "@/services/AuthenticationService.js"
 
 export const namespaced = true
 
@@ -43,11 +43,11 @@ export const actions = {
         })
     })
   },
-  refreshToken({ dispatch, commit, state }, token) {
+  refreshToken({ dispatch, commit, state }) {
     commit("AUTH_REQUEST")
     return new Promise((resolve, reject) => {
       state.service
-        .refreshToken(token, state.authenticateUser.intervalId)
+        .refreshToken(state.authenticateUser.intervalId)
         .then((user) => {
           commit("AUTH_SUCCESS", user)
           resolve(user)
@@ -84,6 +84,12 @@ export const getters = {
   },
   getIntervalId: (state) => {
     return state.authenticateUser.intervalId
+  },
+  getRoles: (state) => {
+    return state.authenticateUser.roles || []
+  },
+  getPermissions: (state) => {
+    return state.authenticateUser.permissions || []
   },
   authenticationService: (state) => state.service,
   getStatus: (state) => state.status,

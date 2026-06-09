@@ -1,11 +1,16 @@
-import Client from "@/repositories/Client/AxiosClient"
-import { baseUrl } from "@/repositories/Client/AxiosClient"
+import Client from "@/repositories/Client/AxiosClient.js"
 
-const resource = `${baseUrl}/api/clusters`
+const resource = `/api/clusters`
 
 export default {
   create(cluster) {
     return Client.post(`${resource}`, cluster)
+  },
+  update(clusterId, cluster) {
+    return Client.put(`${resource}/${clusterId}`, cluster)
+  },
+  delete(clusterId) {
+    return Client.delete(`${resource}/${clusterId}`)
   },
   list() {
     return Client.get(`${resource}`)

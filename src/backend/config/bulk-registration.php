@@ -1,12 +1,26 @@
 <?php
 
+use App\Plugins\BulkRegistration\Services\AddressService;
+use App\Plugins\BulkRegistration\Services\ApplianceTypeService;
+use App\Plugins\BulkRegistration\Services\CityService;
+use App\Plugins\BulkRegistration\Services\ClusterService;
+use App\Plugins\BulkRegistration\Services\ConnectionGroupService;
+use App\Plugins\BulkRegistration\Services\ConnectionTypeService;
+use App\Plugins\BulkRegistration\Services\GeographicalInformationService;
+use App\Plugins\BulkRegistration\Services\ManufacturerService;
+use App\Plugins\BulkRegistration\Services\MeterService;
+use App\Plugins\BulkRegistration\Services\MiniGridService;
+use App\Plugins\BulkRegistration\Services\PersonDocumentService;
+use App\Plugins\BulkRegistration\Services\PersonService;
+use App\Plugins\BulkRegistration\Services\TariffService;
+
 return [
     'csv_fields' => [
         'person' => [
             'name' => 'First Name',
             'm-name' => 'Middle Name',
             'surname' => 'Surname',
-            'sex' => 'Gender',
+            'gender' => 'Gender',
             'birth_date' => 'Date of birth',
         ],
 
@@ -36,7 +50,6 @@ return [
             'name' => 'Tariff Name',
             'currency' => 'Currency',
             'price' => 'Tariff Price',
-            'total_price' => 'Tariff Price',
         ],
 
         'connection_type' => [
@@ -115,18 +128,18 @@ return [
     ],
 
     'reflections' => [
-        'PersonService' => 'Inensus\BulkRegistration\Services\PersonService',
-        'PersonDocumentService' => 'Inensus\BulkRegistration\Services\PersonDocumentService',
-        'ClusterService' => 'Inensus\BulkRegistration\Services\ClusterService',
-        'MiniGridService' => 'Inensus\BulkRegistration\Services\MiniGridService',
-        'GeographicalInformationService' => 'Inensus\BulkRegistration\Services\GeographicalInformationService',
-        'CityService' => 'Inensus\BulkRegistration\Services\CityService',
-        'AddressService' => 'Inensus\BulkRegistration\Services\AddressService',
-        'TariffService' => 'Inensus\BulkRegistration\Services\TariffService',
-        'ConnectionTypeService' => 'Inensus\BulkRegistration\Services\ConnectionTypeService',
-        'ConnectionGroupService' => 'Inensus\BulkRegistration\Services\ConnectionGroupService',
-        'ApplianceTypeService' => 'Inensus\BulkRegistration\Services\ApplianceTypeService',
-        'MeterService' => 'Inensus\BulkRegistration\Services\MeterService',
-        'ManufacturerService' => 'Inensus\BulkRegistration\Services\ManufacturerService',
+        'PersonService' => PersonService::class,
+        'PersonDocumentService' => PersonDocumentService::class,
+        'ClusterService' => ClusterService::class,
+        'MiniGridService' => MiniGridService::class,
+        'GeographicalInformationService' => GeographicalInformationService::class,
+        'CityService' => CityService::class,
+        'AddressService' => AddressService::class,
+        'TariffService' => TariffService::class,
+        'ConnectionTypeService' => ConnectionTypeService::class,
+        'ConnectionGroupService' => ConnectionGroupService::class,
+        'ApplianceTypeService' => ApplianceTypeService::class,
+        'MeterService' => MeterService::class,
+        'ManufacturerService' => ManufacturerService::class,
     ],
 ];

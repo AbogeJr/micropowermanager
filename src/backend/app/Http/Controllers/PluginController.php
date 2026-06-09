@@ -3,11 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\ApiResource;
+use App\Models\Plugins;
 use App\Services\MpmPluginService;
 use App\Services\PluginsService;
 use App\Services\RegistrationTailService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 
 class PluginController extends Controller {
     public function __construct(
@@ -25,11 +25,6 @@ class PluginController extends Controller {
         $mpmPlugin = $this->mpmPluginService->getById($mpmPluginId);
         $registrationTail = $this->registrationTailService->getFirst();
 
-        $pluginData = [
-            'mpm_plugin_id' => $mpmPluginId,
-            'status' => $request->input('checked'),
-        ];
-
         if (!$plugin && !$request->input('checked')) {
             throw new \Exception('Plugin not found');
         }
@@ -37,19 +32,24 @@ class PluginController extends Controller {
         if ($request->input('checked')) {
             // Check if this is the first time we are installing the plugin.
             // In that case we also need to run install commands, if present
-            if (!$plugin) {
-                $createdPlugin = $this->pluginsService->create($pluginData);
-                $this->registrationTailService->addMpmPluginToRegistrationTail($registrationTail, $mpmPlugin);
-
-                Artisan::call($mpmPlugin->installation_command);
+            if (!$plugin instanceof Plugins) {
+                $createdPlugin = $this->pluginsService->enablePlugin($mpmPluginId);
 
                 return ApiResource::make($createdPlugin);
             }
 
+            $pluginData = [
+                'mpm_plugin_id' => $mpmPluginId,
+                'status' => 1,
+            ];
             $updatedPlugin = $this->pluginsService->update($plugin, $pluginData);
 
             $this->registrationTailService->addMpmPluginToRegistrationTail($registrationTail, $mpmPlugin);
         } else {
+            $pluginData = [
+                'mpm_plugin_id' => $mpmPluginId,
+                'status' => 0,
+            ];
             $updatedPlugin = $this->pluginsService->update($plugin, $pluginData);
 
             $this->registrationTailService->removeMpmPluginFromRegistrationTail($registrationTail, $mpmPlugin);

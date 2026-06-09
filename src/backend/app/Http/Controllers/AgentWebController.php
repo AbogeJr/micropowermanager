@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ChangeAgentPasswordRequest;
 use App\Http\Requests\CreateAgentRequest;
+use App\Http\Requests\UpdateAgentRequest;
 use App\Http\Resources\ApiResource;
 use App\Models\CompanyDatabase;
 use App\Services\AddressesService;
@@ -11,8 +13,9 @@ use App\Services\CountryService;
 use App\Services\DatabaseProxyService;
 use App\Services\PersonAddressService;
 use App\Services\PersonService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Tymon\JWTAuth\JWTGuard;
 
 class AgentWebController extends Controller {
     public function __construct(
@@ -47,7 +50,7 @@ class AgentWebController extends Controller {
             'fire_base_token' => '-',
             'connection' => ' ', // TODO:  solve this.  //auth('api')->user()->company->database->database_name
         ];
-        /** @var \Tymon\JWTAuth\JWTGuard $guard */
+        /** @var JWTGuard $guard */
         $guard = auth('api');
         $companyId = $guard->payload()->get('companyId');
         $companyDatabase = CompanyDatabase::query()->where('company_id', $companyId)->firstOrFail();
@@ -70,11 +73,10 @@ class AgentWebController extends Controller {
         ));
     }
 
-    public function update(int $agentId, Request $request): ApiResource {
+    public function update(int $agentId, UpdateAgentRequest $request): ApiResource {
         $agent = $this->agentService->getById($agentId);
-        $agentData = $request->all();
 
-        return ApiResource::make($this->agentService->update($agent, $agentData));
+        return ApiResource::make($this->agentService->update($agent, $request->validated()));
     }
 
     public function destroy(int $agentId, Request $request): ApiResource {
@@ -95,30 +97,30 @@ class AgentWebController extends Controller {
         return ApiResource::make($this->agentService->searchAgent($term, $paginate));
     }
 
-    /**
-     * @return Response
-     */
-    public function resetPassword(Request $request, Response $response) {
+    public function changePassword(int $agentId, ChangeAgentPasswordRequest $request): ApiResource {
+        $agent = $this->agentService->getById($agentId);
+        $this->agentService->changePassword($agent, $request->validated('password'));
+
+        return ApiResource::make(['message' => 'Password updated successfully']);
+    }
+
+    public function resetPassword(Request $request): JsonResponse {
         $responseMessage = $this->agentService->resetPassword($request->input('email'));
 
         if ($responseMessage === 'Invalid email.') {
-            return $response->setStatusCode(422)->setContent(
-                [
-                    'data' => [
-                        'message' => $responseMessage,
-                        'status_code' => 400,
-                    ],
-                ]
-            );
-        }
-
-        return $response->setStatusCode(200)->setContent(
-            [
+            return response()->json([
                 'data' => [
                     'message' => $responseMessage,
-                    'status_code' => 200,
+                    'status_code' => 400,
                 ],
-            ]
-        );
+            ], 422);
+        }
+
+        return response()->json([
+            'data' => [
+                'message' => $responseMessage,
+                'status_code' => 200,
+            ],
+        ], 200);
     }
 }

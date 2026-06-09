@@ -7,7 +7,10 @@ $queues = [
     'token',
     'transaction_appliance',
     'transaction_energy',
+    'prospect',
     'emails',
+    'import',
+    'steama_meter',
 ];
 
 return [

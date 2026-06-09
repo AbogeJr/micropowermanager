@@ -12,14 +12,15 @@ use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class MailHelper {
     /**
-     * @param string      $to
-     * @param string      $title
-     * @param string      $body
-     * @param string|null $attachment
-     *
      * @throws MailNotSentException
      */
     public function sendPlain(string $to, string $title, string $body, ?string $attachment = null): void {
+        // Validate email address before attempting to send
+        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            Log::warning("Attempted to send email to invalid address: {$to}");
+            throw new MailNotSentException("Invalid email address: {$to}");
+        }
+
         try {
             $mailable = new PlainEmail($title, $body, $attachment);
             Mail::to($to)->queue($mailable);
@@ -41,6 +42,12 @@ class MailHelper {
         ?array $variables = null,
         ?string $attachmentPath = null,
     ): void {
+        // Validate email address before attempting to send
+        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            Log::warning("Attempted to send email to invalid address: {$to}");
+            throw new MailNotSentException("Invalid email address: {$to}");
+        }
+
         try {
             $html = View::make($templatePath, array_merge($variables ?? [], ['title' => $title]))->render();
 

@@ -3,17 +3,20 @@
 namespace App\Listeners;
 
 use App\Events\TransactionFailedEvent;
+use App\Models\Transaction\BasePaymentProviderTransaction;
 use App\Models\Transaction\Transaction;
-use MPM\Transaction\Provider\ITransactionProvider;
-use MPM\Transaction\Provider\TransactionAdapter;
+use App\Providers\Helpers\TransactionAdapter;
+use App\Providers\Interfaces\ITransactionProvider;
 
 class TransactionFailedListener {
     public function onTransactionFailed(Transaction $transaction, ?string $message = null): void {
         $originalTransaction = $transaction->originalTransaction()->first();
-        if ($originalTransaction instanceof ITransactionProvider) {
+        if ($originalTransaction instanceof BasePaymentProviderTransaction) {
             $baseTransaction = TransactionAdapter::getTransaction($originalTransaction);
-            $baseTransaction->addConflict($message);
-            $baseTransaction->sendResult(false, $transaction);
+            if ($baseTransaction instanceof ITransactionProvider) {
+                $baseTransaction->addConflict($message);
+                $baseTransaction->sendResult(false, $transaction);
+            }
         }
     }
 

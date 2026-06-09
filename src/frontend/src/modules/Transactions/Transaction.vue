@@ -9,7 +9,7 @@
             <widget
               :title="$tc('phrases.providerSpecificInformation')"
               :show-spinner="false"
-              color="green"
+              color="primary"
             >
               <md-card>
                 <md-card-content>
@@ -50,28 +50,25 @@
                       {{ $tc("phrases.paymentType") }}
                     </div>
                     <div class="md-layout-item md-subheader n-font">
-                      <span
-                        v-text="
-                          transaction.type === 'energy'
-                            ? $tc('words.energy')
-                            : $tc('phrases.deferredPayment')
-                        "
-                      ></span>
+                      <span>{{ transactionTypeLabel }}</span>
                       <div style="margin-left: 0.2em">
                         <small
                           v-if="
                             transaction.type === 'energy' && transaction.token
                           "
                         >
-                          ({{ readable(transaction.token.load) }}kWh)
+                          ({{ readable(transaction.token.token_amount) }}kWh)
                         </small>
                         <small
                           v-else-if="
-                            transaction.type === 'deferred_payment' &&
-                            transaction.token
+                            [
+                              'deferred_payment',
+                              'eaas_rate',
+                              'down_payment',
+                            ].includes(transaction.type) && transaction.token
                           "
                         >
-                          ({{ readable(transaction.token.load) }}day's)
+                          ({{ readable(transaction.token.token_amount) }} day's)
                         </small>
                       </div>
                     </div>
@@ -82,18 +79,23 @@
                       {{ $tc("words.deviceType") }}
                     </div>
                     <div class="md-layout-item md-subheader n-font">
-                      {{ $tc(`words.${transaction.device.device_type}`) }}
+                      {{ deviceType }}
                     </div>
                   </div>
                   <hr class="hr-d" />
                   <div class="md-layout">
                     <div class="md-layout-item md-subheader">
-                      {{ $tc("words.device") }}
+                      {{
+                        transaction.device
+                          ? $tc("words.device")
+                          : $tc("words.appliance")
+                      }}
                     </div>
                     <div
                       class="md-layout-item md-subheader n-font"
                       v-if="
                         transaction.payment_histories[0].paymentHistory &&
+                        transaction.device &&
                         transaction.device.device_type === 'meter'
                       "
                     >
@@ -110,6 +112,7 @@
                       class="md-layout-item md-subheader n-font"
                       v-else-if="
                         transaction.payment_histories[0].paymentHistory &&
+                        transaction.device &&
                         transaction.device.device_type === 'solar_home_system'
                       "
                     >
@@ -124,8 +127,41 @@
                         {{ transaction.message }}
                       </router-link>
                     </div>
+                    <div
+                      class="md-layout-item md-subheader n-font"
+                      v-else-if="
+                        transaction.appliance && transaction.appliance.id
+                      "
+                    >
+                      <router-link
+                        :to="{
+                          path:
+                            '/sold-appliance-detail/' +
+                            transaction.appliance.id,
+                        }"
+                        class="nav-link"
+                      >
+                        {{ deviceDisplay }}
+                      </router-link>
+                    </div>
+                    <div
+                      class="md-layout-item md-subheader n-font"
+                      v-else-if="
+                        isApplianceTransaction && applianceIdFromMessage
+                      "
+                    >
+                      <router-link
+                        :to="{
+                          path:
+                            '/sold-appliance-detail/' + applianceIdFromMessage,
+                        }"
+                        class="nav-link"
+                      >
+                        {{ deviceDisplay }}
+                      </router-link>
+                    </div>
                     <div class="md-layout-item md-subheader n-font" v-else>
-                      {{ transaction.message }}
+                      {{ deviceDisplay }}
                     </div>
                   </div>
                   <hr class="hr-d" />
@@ -174,7 +210,7 @@
             <widget
               title="Transaction Processing"
               :show-spinner="false"
-              color="green"
+              color="primary"
             >
               <md-card>
                 <div
@@ -225,7 +261,7 @@
                           >
                             <md-table-cell>
                               <p>
-                                {{ p.payment_type }}
+                                {{ formatPaymentType(p.payment_type) }}
                               </p>
                             </md-table-cell>
                             <md-table-cell>
@@ -271,7 +307,7 @@
                 transaction.original_transaction_type !==
                   'third_party_transaction'
               "
-              color="red"
+              color="secondary"
             >
               <md-card>
                 <md-card-content>
@@ -298,21 +334,49 @@
             </widget>
           </div>
         </div>
+        <div
+          class="md-layout-item md-size-50 md-small-size-100"
+          v-if="ot && ot.raw_message"
+        >
+          <div class="transaction-detail-card">
+            <widget
+              title="Incoming SMS"
+              :show-spinner="false"
+              color="secondary"
+            >
+              <md-card>
+                <md-card-content>
+                  <div class="md-layout md-gutter md-size-100">
+                    <div class="md-layout-item md-subheader md-size-20">
+                      {{ $tc("words.body") }}
+                    </div>
+                    <div
+                      class="md-layout-item md-subheader md-size-75 message-box"
+                    >
+                      {{ ot.raw_message }}
+                    </div>
+                  </div>
+                </md-card-content>
+              </md-card>
+            </widget>
+          </div>
+        </div>
       </div>
     </div>
   </section>
 </template>
 
 <script>
-import { timing } from "@/mixins/timing"
-import { currency } from "@/mixins/currency"
-import PaymentHistoryChart from "@/modules/Transactions/PaymentHistoryChart"
-import AgentTransactionDetail from "@/modules/Agent/AgentTransactionDetail"
+import { currency } from "@/mixins/currency.js"
+import { notify } from "@/mixins/notify.js"
+import { timing } from "@/mixins/timing.js"
+import AgentTransactionDetail from "@/modules/Agent/AgentTransactionDetail.vue"
+import CashTransactionDetail from "@/modules/Transactions/CashTransactionDetail.vue"
+import PaymentHistoryChart from "@/modules/Transactions/PaymentHistoryChart.vue"
+import SmsTransactionDetail from "@/modules/Transactions/SmsTransactionDetail.vue"
+import { PersonService } from "@/services/PersonService.js"
+import { TransactionService } from "@/services/TransactionService.js"
 import Widget from "@/shared/Widget.vue"
-import { TransactionService } from "@/services/TransactionService"
-import { PersonService } from "@/services/PersonService"
-
-import { notify } from "@/mixins/notify"
 
 export default {
   name: "Transaction",
@@ -320,6 +384,8 @@ export default {
   components: {
     Widget,
     AgentTransactionDetail,
+    CashTransactionDetail,
+    SmsTransactionDetail,
     PaymentHistoryChart,
   },
   created() {
@@ -348,8 +414,6 @@ export default {
       switch (transactionType) {
         case "vodacom_transaction":
           return "VodacomTransactionDetail"
-        case "airtel_transaction":
-          return "AirtelTransactionDetail"
         case "agent_transaction":
           return "AgentTransactionDetail"
         case "third_party_transaction":
@@ -360,12 +424,75 @@ export default {
           return "SwiftaTransactionDetail"
         case "wavecom_transaction":
           return "WaveComTransactionDetail"
+        case "paystack_transaction":
+          return "PaystackTransactionDetail"
+        case "cash_transaction":
+          return "CashTransactionDetail"
+        case "sms_transaction":
+          return "SmsTransactionDetail"
         default:
           return null
       }
     },
+    deviceType() {
+      if (this.transaction.device && this.transaction.device.device_type) {
+        return this.$tc(`words.${this.transaction.device.device_type}`)
+      }
+      if (this.transaction.appliance && this.transaction.appliance.appliance) {
+        return this.transaction.appliance.appliance.name
+      }
+      return this.$tc("words.appliance")
+    },
+    deviceDisplay() {
+      if (this.transaction.device) {
+        return this.transaction.message
+      }
+      if (this.transaction.appliance && this.transaction.appliance.appliance) {
+        return this.transaction.appliance.appliance.name
+      }
+      return this.transaction.message !== "-"
+        ? this.transaction.message
+        : this.$tc("phrases.noDeviceAssigned")
+    },
+    transactionTypeLabel() {
+      const labels = {
+        energy: this.$tc("words.energy"),
+        deferred_payment: this.$tc("phrases.deferredPayment"),
+        eaas_rate: this.$tc("phrases.eaasRate"),
+        down_payment: this.$tc("phrases.downPayment"),
+      }
+      return labels[this.transaction.type] || this.transaction.type
+    },
+    isApplianceTransaction() {
+      return (
+        ["deferred_payment", "eaas_rate", "down_payment"].includes(
+          this.transaction.type,
+        ) &&
+        this.transaction.original_transaction_type === "cash_transaction" &&
+        !this.transaction.device
+      )
+    },
+    applianceIdFromMessage() {
+      const message = this.transaction.message
+      if (message && message !== "-" && /^\d+$/.test(message)) {
+        return parseInt(message, 10)
+      }
+      return null
+    },
   },
   methods: {
+    formatPaymentType(type) {
+      const labels = {
+        energy_service: this.$tc("phrases.eaasRate"),
+        eaas_rate: this.$tc("phrases.eaasRate"),
+        down_payment: this.$tc("phrases.downPayment"),
+        installment: this.$tc("phrases.deferredPayment"),
+        deferred_payment: this.$tc("phrases.deferredPayment"),
+        energy: this.$tc("words.energy"),
+        access_rate: this.$tc("phrases.accessRate"),
+      }
+      return labels[type] || type
+    },
     async getDetail(id) {
       try {
         this.transaction = await this.transactionService.getTransaction(id)
@@ -376,7 +503,15 @@ export default {
           )
         }
       } catch (e) {
-        this.alertNotify("error", e.message)
+        if (e.response && e.response.status === 403) {
+          this.alertNotify(
+            "error",
+            "You do not have permission to view this transaction",
+          )
+          this.$router.push({ path: "/transactions" })
+        } else {
+          this.alertNotify("error", e.message)
+        }
       }
     },
     async getRelatedPerson(personId) {
@@ -385,14 +520,18 @@ export default {
         this.personName = person.name + " " + person.surname
         this.personId = person.id
       } catch (e) {
-        this.alertNotify("error", e.message)
+        if (e.response && e.response.status === 403) {
+          console.warn("Customer details: Insufficient permissions")
+        } else {
+          this.alertNotify("error", e.message)
+        }
       }
     },
   },
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .transaction-detail-card {
   margin-top: 1rem !important;
   margin-right: 1rem !important;
@@ -415,7 +554,7 @@ export default {
 
 .message-box {
   padding: 10px;
-  background-color: #f5e8e8;
+  background-color: white;
   -moz-border-radius: 10px;
   border-radius: 14px;
   margin-top: 2vh;

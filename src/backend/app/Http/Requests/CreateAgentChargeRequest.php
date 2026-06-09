@@ -7,8 +7,6 @@ use Illuminate\Foundation\Http\FormRequest;
 class CreateAgentChargeRequest extends FormRequest {
     /**
      * Determine if the user is authorized to make this request.
-     *
-     * @return bool
      */
     public function authorize(): bool {
         return true;
@@ -23,8 +21,8 @@ class CreateAgentChargeRequest extends FormRequest {
         // TODO: Change on UI.  user_id is not required.
 
         return [
-            'agent_id' => 'required',
-            'amount' => 'required|numeric',
+            'agent_id' => ['required'],
+            'amount' => ['required', 'numeric'],
         ];
     }
 }

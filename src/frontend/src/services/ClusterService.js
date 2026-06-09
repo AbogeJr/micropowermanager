@@ -1,7 +1,8 @@
-import { ErrorHandler } from "@/Helpers/ErrorHandler"
-import i18n from "../i18n"
-import { convertObjectKeysToSnakeCase } from "@/Helpers/Utils"
-import ClusterRepository from "@/repositories/ClusterRepository"
+import i18n from "../i18n.js"
+
+import { ErrorHandler } from "@/Helpers/ErrorHandler.js"
+import { convertObjectKeysToSnakeCase } from "@/Helpers/Utils.js"
+import ClusterRepository from "@/repositories/ClusterRepository.js"
 
 export class ClusterService {
   constructor() {
@@ -21,6 +22,34 @@ export class ClusterService {
         return new ErrorHandler(error, "http", status)
 
       return data.data
+    } catch (e) {
+      const errorMessage = e.response.data.message
+      return new ErrorHandler(errorMessage, "http")
+    }
+  }
+
+  async updateCluster(clusterId, clusterData) {
+    const params = convertObjectKeysToSnakeCase(clusterData)
+    try {
+      const { data, status, error } = await this.repository.update(
+        clusterId,
+        params,
+      )
+      if (status !== 200) return new ErrorHandler(error, "http", status)
+
+      return data.data
+    } catch (e) {
+      const errorMessage = e.response.data.message
+      return new ErrorHandler(errorMessage, "http")
+    }
+  }
+
+  async deleteCluster(clusterId) {
+    try {
+      const { status, error } = await this.repository.delete(clusterId)
+      if (status !== 200) return new ErrorHandler(error, "http", status)
+
+      return true
     } catch (e) {
       const errorMessage = e.response.data.message
       return new ErrorHandler(errorMessage, "http")

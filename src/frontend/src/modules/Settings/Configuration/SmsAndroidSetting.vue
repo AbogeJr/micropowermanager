@@ -19,7 +19,7 @@
     >
       <form class="md-layout md-gutter" data-vv-scope="SmsAndroidSettings-Form">
         <div
-          class="md-layout-item md-xlarge-size-50 md-large-size-50 md-medium-size-50 md-small-size-50"
+          class="md-layout-item md-xlarge-size-50 md-large-size-50 md-medium-size-50 md-small-size-70"
         >
           <md-field
             :class="{
@@ -42,7 +42,7 @@
         </div>
 
         <div
-          class="md-layout-item md-xlarge-size-25 md-large-size-25 md-medium-size-25 md-small-size-25"
+          class="md-layout-item md-xlarge-size-25 md-large-size-25 md-medium-size-25 md-small-size-30"
           style="display: inline-flex"
         >
           <div @click="saveSmsAndroidSetting(smsAndroidSetting)">
@@ -60,7 +60,7 @@
 </template>
 
 <script>
-import { EventBus } from "@/shared/eventbus"
+import { EventBus } from "@/shared/eventbus.js"
 
 export default {
   name: "SmsAndroidSetting",
@@ -90,4 +90,4 @@ export default {
 }
 </script>
 
-<style scoped></style>
+<style scoped lang="scss"></style>

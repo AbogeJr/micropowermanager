@@ -2,15 +2,20 @@
 
 namespace Tests\Feature;
 
+use Database\Factories\ApplianceFactory;
+use Tests\CreateEnvironments;
 use Tests\TestCase;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AgentAssignedApplianceWebTest extends TestCase {
     use CreateEnvironments;
 
-    public function testUserGetsAgentsAssignedApplianceList() {
+    public function testUserGetsAgentsAssignedApplianceList(): void {
         $this->createTestData();
+        $this->createCluster();
+        $this->createMiniGrid();
+        $this->createCity();
         $agentCount = 1;
+        $this->createAgentCommission();
         $this->createAgent($agentCount);
         $applianceCount = 5;
         $this->createAssignedAppliances($applianceCount);
@@ -19,16 +24,22 @@ class AgentAssignedApplianceWebTest extends TestCase {
         $this->assertEquals(count($response['data']), $applianceCount);
     }
 
-    public function testUserAssignsAnAssignedApplianceToAgent() {
+    public function testUserAssignsAnAssignedApplianceToAgent(): void {
         $this->createTestData();
+        $this->createCluster();
+        $this->createMiniGrid();
+        $this->createCity();
         $agentCount = 1;
+        $this->createAgentCommission();
         $this->createAgent($agentCount);
-        $applianceCount = 1;
-        $this->createAssetType($applianceCount);
+        $this->createApplianceType();
+        $appliance = ApplianceFactory::new()->create([
+            'appliance_type_id' => $this->applianceTypes[0]->id,
+        ]);
         $postData = [
             'agent_id' => $this->agents[0]->id,
             'user_id' => $this->user->id,
-            'appliance_type_id' => $this->assetTypes[0]->id,
+            'appliance_id' => $appliance->id,
             'cost' => $this->faker->randomFloat(2, 1, 100),
         ];
 
@@ -37,13 +48,5 @@ class AgentAssignedApplianceWebTest extends TestCase {
 
         $this->assertEquals($response['data']['agent_id'], $this->agents[0]->id);
         $this->assertEquals($response['data']['cost'], $postData['cost']);
-    }
-
-    public function actingAs($user, $driver = null) {
-        $token = JWTAuth::fromUser($user);
-        $this->withHeader('Authorization', "Bearer {$token}");
-        parent::actingAs($user);
-
-        return $this;
     }
 }

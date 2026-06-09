@@ -1,7 +1,6 @@
-import Client from "@/repositories/Client/AxiosClient"
-import { baseUrl } from "@/repositories/Client/AxiosClient"
+import Client from "@/repositories/Client/AxiosClient.js"
 
-const resource = `${baseUrl}/api/agents`
+const resource = `/api/agents`
 
 export default {
   list() {
@@ -15,6 +14,9 @@ export default {
   },
   update(agent) {
     return Client.put(`${resource}/${agent.id}`, agent)
+  },
+  changePassword(agentId, payload) {
+    return Client.put(`${resource}/${agentId}/password`, payload)
   },
   delete(agentId) {
     return Client.delete(`${resource}/${agentId}`)

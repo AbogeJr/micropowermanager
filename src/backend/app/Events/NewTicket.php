@@ -2,12 +2,12 @@
 
 namespace App\Events;
 
+use App\Models\Ticket\Ticket;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
-use Inensus\Ticket\Models\Ticket;
 
 class NewTicket implements ShouldBroadcast {
     use Dispatchable;
@@ -16,8 +16,6 @@ class NewTicket implements ShouldBroadcast {
 
     /**
      * Create a new event instance.
-     *
-     * @param Ticket $ticket
      */
     public function __construct(public Ticket $ticket) {}
 

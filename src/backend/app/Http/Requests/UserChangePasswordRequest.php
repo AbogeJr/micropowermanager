@@ -7,8 +7,6 @@ use Illuminate\Foundation\Http\FormRequest;
 class UserChangePasswordRequest extends FormRequest {
     /**
      * Determine if the user is authorized to make this request.
-     *
-     * @return bool
      */
     public function authorize(): bool {
         return true;
@@ -21,8 +19,8 @@ class UserChangePasswordRequest extends FormRequest {
      */
     public function rules(): array {
         return [
-            'password' => 'required|min:5|max:15',
-            'confirm_password' => 'required|same:password',
+            'password' => ['required', 'min:5', 'max:128'],
+            'confirm_password' => ['required', 'same:password'],
         ];
     }
 }

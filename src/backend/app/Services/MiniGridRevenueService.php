@@ -4,9 +4,8 @@ namespace App\Services;
 
 use App\Models\Token;
 use App\Models\Transaction\Transaction;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Carbon;
-use MPM\Device\MiniGridDeviceService;
 
 class MiniGridRevenueService {
     public function __construct(
@@ -23,8 +22,8 @@ class MiniGridRevenueService {
         ?string $endDate,
         MeterService|MiniGridDeviceService $miniGridDeviceService,
     ): Collection {
-        $startDate = $startDate ?? date('Y-01-01');
-        $endDate = $endDate ?? date('Y-m-t');
+        $startDate ??= date('Y-01-01');
+        $endDate ??= date('Y-m-t');
         $miniGridMeters = $miniGridDeviceService->getMetersByMiniGridId($miniGridId);
 
         return $this->transaction->newQuery()
@@ -32,9 +31,7 @@ class MiniGridRevenueService {
             ->whereHasMorph(
                 'originalTransaction',
                 '*',
-                static function ($q) {
-                    return $q->where('status', 1);
-                }
+                static fn ($q) => $q->where('status', 1)
             )
             ->whereIn('message', $miniGridMeters->pluck('serial_number'))
             ->whereBetween('created_at', [$startDate, Carbon::parse($endDate)->endOfDay()])->get();
@@ -49,8 +46,8 @@ class MiniGridRevenueService {
         ?string $endDate,
         MeterService|MiniGridDeviceService $miniGridDeviceService,
     ): array {
-        $startDate = $startDate ?? date('Y-01-01');
-        $endDate = $endDate ?? date('Y-m-t');
+        $startDate ??= date('Y-01-01');
+        $endDate ??= date('Y-m-t');
         $miniGridMeters = $miniGridDeviceService->getMetersByMiniGridId($miniGridId);
         $soldEnergy = $this->token->newQuery()
             ->selectRaw('COUNT(id) as amount, SUM(token_amount) as token_amount')

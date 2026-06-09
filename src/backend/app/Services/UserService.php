@@ -2,18 +2,21 @@
 
 namespace App\Services;
 
+use App\Events\UserCreatedEvent;
 use App\Exceptions\MailNotSentException;
 use App\Helpers\MailHelper;
 use App\Helpers\PasswordGenerator;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use MPM\User\Events\UserCreatedEvent;
+use Illuminate\Support\Facades\DB;
+use Tymon\JWTAuth\JWTGuard;
 
 class UserService {
     public function __construct(
         private User $user,
         private MailHelper $mailHelper,
+        private DatabaseProxyService $databaseProxyService,
     ) {}
 
     /**
@@ -23,7 +26,7 @@ class UserService {
         $shouldSyncUserWithMasterDatabase = $companyId !== null;
 
         if ($companyId === null) {
-            /** @var \Tymon\JWTAuth\JWTGuard $guard */
+            /** @var JWTGuard $guard */
             $guard = auth('api');
             $payload = $guard->check() ? $guard->payload() : null;
             $companyId = $payload?->get('companyId');
@@ -42,10 +45,20 @@ class UserService {
     }
 
     /**
-     * @param array{password: string} $data
+     * @param array{password?: string, name?: string} $data
      */
     public function update(User $user, array $data): User {
-        $user->update(['password' => $data['password']]);
+        $updateData = [];
+        if (isset($data['password'])) {
+            $updateData['password'] = $data['password'];
+        }
+        if (isset($data['name'])) {
+            $updateData['name'] = $data['name'];
+        }
+
+        if (!empty($updateData)) {
+            $user->update($updateData);
+        }
 
         return $user->fresh();
     }
@@ -78,9 +91,7 @@ class UserService {
             return null;
         }
 
-        $user = $user->fresh()->with(['addressDetails'])->first();
-
-        return $user;
+        return $user->fresh()->with(['addressDetails'])->first();
     }
 
     /**
@@ -89,16 +100,14 @@ class UserService {
     public function list(): LengthAwarePaginator {
         return $this->user->newQuery()
             ->select('id', 'name', 'email')
-            ->with(['addressDetails'])
+            ->with(['addressDetails', 'roles:name'])
             ->paginate();
     }
 
     public function get(int $id): User {
-        $user = User::with(['addressDetails'])
+        return User::with(['addressDetails'])
             ->where('id', '=', $id)
             ->firstOrFail();
-
-        return $user;
     }
 
     /**
@@ -133,7 +142,17 @@ class UserService {
     }
 
     public function delete(User $model): ?bool {
-        throw new \Exception('Method delete() not yet implemented.');
+        $email = $model->getEmail();
+
+        return DB::transaction(function () use ($model, $email): ?bool {
+            $model->address()->delete();
+            $model->roles()->detach();
+            $deleted = $model->delete();
+
+            $this->databaseProxyService->deleteByEmail($email);
+
+            return $deleted;
+        });
     }
 
     /**
@@ -148,5 +167,21 @@ class UserService {
      */
     public function getUsers(): Collection {
         return $this->user->newQuery()->get();
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    public function getUsersWithRolesAndPermissions(): Collection {
+        return $this->user->newQuery()->with(['roles.permissions'])->get();
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    public function getUsersToSendOutstandingDebtsReport(): Collection {
+        return $this->user->newQuery()->whereHas('roles', function ($query) {
+            $query->whereIn('name', ['admin', 'owner', 'financial-manager']);
+        })->get();
     }
 }

@@ -2,14 +2,17 @@
 
 namespace Tests\Feature;
 
+use Tests\CreateEnvironments;
 use Tests\TestCase;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AgentAppTicketsTest extends TestCase {
     use CreateEnvironments;
 
-    public function testAgentGetsTicketList() {
+    public function testAgentGetsTicketList(): void {
         $this->createTestData();
+        $this->createCluster();
+        $this->createMiniGrid();
+        $this->createCity();
         $this->createAgentCommission();
         $this->createAgent();
         $this->createTicketCategory();
@@ -18,11 +21,14 @@ class AgentAppTicketsTest extends TestCase {
         $this->createTicket($ticketCount, 1, $this->person->id, $this->agent->id);
         $response = $this->actingAs($this->agent)->get('/api/app/agents/ticket');
         $response->assertStatus(200);
-        $this->assertEquals($ticketCount, count($response['data']['data']));
+        $this->assertEquals($ticketCount, count($response['data']));
     }
 
-    public function testAgentGetsTicketById() {
+    public function testAgentGetsTicketById(): void {
         $this->createTestData();
+        $this->createCluster();
+        $this->createMiniGrid();
+        $this->createCity();
         $this->createAgentCommission();
         $this->createAgent();
         $this->createTicketCategory();
@@ -36,8 +42,11 @@ class AgentAppTicketsTest extends TestCase {
         $this->assertEquals($this->agent->id, $response['data']['creator_id']);
     }
 
-    public function testAgentGetsTicketCustomerId() {
+    public function testAgentGetsTicketCustomerId(): void {
         $this->createTestData();
+        $this->createCluster();
+        $this->createMiniGrid();
+        $this->createCity();
         $this->createAgentCommission();
         $this->createAgent();
         $this->createTicketCategory();
@@ -49,12 +58,15 @@ class AgentAppTicketsTest extends TestCase {
             $this->person->id
         ));
         $response->assertStatus(200);
-        $this->assertEquals($this->ticket->id, $response['data']['data'][0]['id']);
-        $this->assertEquals($this->agent->id, $response['data']['data'][0]['creator_id']);
+        $this->assertEquals($this->ticket->id, $response['data'][0]['id']);
+        $this->assertEquals($this->agent->id, $response['data'][0]['creator_id']);
     }
 
-    public function testAgentCreatesATicket() {
+    public function testAgentCreatesATicket(): void {
         $this->createTestData();
+        $this->createCluster();
+        $this->createMiniGrid();
+        $this->createCity();
         $this->createAgentCommission();
         $this->createAgent();
         $this->createPerson();
@@ -67,20 +79,12 @@ class AgentAppTicketsTest extends TestCase {
             'label' => $this->ticketCategory->id,
             'title' => 'title',
             'description' => 'test description',
-            'assignedId' => $this->ticketUser->extern_id,
+            'assignedId' => $this->ticketUser->id,
             'outsourcing' => 0,
         ];
         $response = $this->actingAs($this->agent)->post('/api/app/agents/ticket', $postData);
         $response->assertStatus(200);
         $this->assertEquals($this->agent->id, $response['data'][0]['creator_id']);
         $this->assertEquals('agent', $response['data'][0]['creator_type']);
-    }
-
-    public function actingAs($user, $driver = null) {
-        $token = JWTAuth::fromUser($user);
-        $this->withHeader('Authorization', "Bearer {$token}");
-        parent::actingAs($user);
-
-        return $this;
     }
 }

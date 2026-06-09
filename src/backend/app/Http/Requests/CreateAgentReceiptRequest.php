@@ -7,8 +7,6 @@ use Illuminate\Foundation\Http\FormRequest;
 class CreateAgentReceiptRequest extends FormRequest {
     /**
      * Determine if the user is authorized to make this request.
-     *
-     * @return bool
      */
     public function authorize(): bool {
         return true;
@@ -21,8 +19,8 @@ class CreateAgentReceiptRequest extends FormRequest {
      */
     public function rules(): array {
         return [
-            'agent_id' => 'required',
-            'amount' => 'required',
+            'agent_id' => ['required'],
+            'amount' => ['required'],
         ];
     }
 }

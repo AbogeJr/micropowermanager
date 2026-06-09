@@ -3,16 +3,15 @@
 namespace App\Listeners;
 
 use App\Events\TransactionSuccessfulEvent;
+use App\Models\Transaction\BasePaymentProviderTransaction;
 use App\Models\Transaction\Transaction;
-use MPM\Transaction\Provider\ITransactionProvider;
-use MPM\Transaction\Provider\TransactionAdapter;
+use App\Providers\Helpers\TransactionAdapter;
 
 class TransactionSuccessfulListener {
     public function onTransactionSuccess(Transaction $transaction): void {
         $originalTransaction = $transaction->originalTransaction()->first();
-        if ($originalTransaction instanceof ITransactionProvider) {
-            $baseTransaction = TransactionAdapter::getTransaction($originalTransaction);
-            $baseTransaction->sendResult(true, $transaction);
+        if ($originalTransaction instanceof BasePaymentProviderTransaction) {
+            TransactionAdapter::getTransaction($originalTransaction)?->sendResult(true, $transaction);
         }
     }
 

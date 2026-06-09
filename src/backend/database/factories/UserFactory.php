@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Events\UserCreatedEvent;
 use App\Models\User;
 use App\Utils\DemoCompany;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -35,5 +36,12 @@ class UserFactory extends Factory {
             'password' => Hash::make($this->faker->password()),
             'remember_token' => str_random(10),
         ];
+    }
+
+    public function configure() {
+        // add the database proxy for each users that is generated with the factory
+        return $this->afterCreating(function (User $user) {
+            event(new UserCreatedEvent($user, true));
+        });
     }
 }

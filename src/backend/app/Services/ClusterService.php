@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\DTO\ClusterDashboardData;
+use App\Exceptions\EntityHasChildrenException;
 use App\Models\Cluster;
 use App\Services\Interfaces\IBaseService;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 /**
@@ -15,29 +18,22 @@ class ClusterService implements IBaseService {
         private Cluster $cluster,
     ) {}
 
-    protected function setClusterMeterCount(Cluster $cluster, int $meterCount): void {
-        $cluster->meterCount = $meterCount;
-    }
-
-    protected function setRevenue(Cluster $cluster, float $totalTransactionsAmount): void {
-        $cluster->revenue = $totalTransactionsAmount;
-    }
-
-    protected function setPopulation(Cluster $cluster, int $populationCount): void {
-        $cluster->population = $populationCount;
-    }
-
-    public function getCluster(
+    /**
+     * Creates a cluster dashboard data container with computed fields.
+     * This method does not mutate the cluster model.
+     */
+    public function getClusterWithComputedData(
         Cluster $cluster,
         int $meterCount,
         float $totalTransactionsAmount,
         int $populationCount,
-    ): Cluster {
-        $this->setClusterMeterCount($cluster, $meterCount);
-        $this->setRevenue($cluster, $totalTransactionsAmount);
-        $this->setPopulation($cluster, $populationCount);
-
-        return $cluster;
+    ): ClusterDashboardData {
+        return new ClusterDashboardData(
+            cluster: $cluster,
+            meterCount: $meterCount,
+            revenue: $totalTransactionsAmount,
+            population: $populationCount,
+        );
     }
 
     public function getClusterCities(int $clusterId): ?Cluster {
@@ -48,14 +44,11 @@ class ClusterService implements IBaseService {
         return Cluster::query()->with('miniGrids')->find($clusterId);
     }
 
-    public function getGeoLocationById(int $clusterId): mixed {
-        return $this->cluster->newQuery()->select('geo_data')->find($clusterId)->geo_data;
+    public function getGeoLocationById(int $clusterId): ?Cluster {
+        return $this->cluster->newQuery()->select('id', 'name', 'geo_json')->find($clusterId);
     }
 
     /**
-     * @param string|null $startDate
-     * @param string|null $endDate
-     *
      * @return array<int, string>
      */
     public function getDateRangeFromRequest(?string $startDate, ?string $endDate): array {
@@ -95,13 +88,45 @@ class ClusterService implements IBaseService {
     }
 
     /**
+     * @param Cluster              $model
      * @param array<string, mixed> $data
      */
-    public function update($model, array $data): Cluster {
-        throw new \Exception('Method update() not yet implemented.');
+    public function update(Model $model, array $data): Cluster {
+        $attributes = array_filter(
+            [
+                'name' => $data['name'] ?? null,
+                'manager_id' => $data['manager_id'] ?? null,
+                'geo_json' => $data['geo_json'] ?? null,
+            ],
+            static fn ($value): bool => $value !== null,
+        );
+
+        $model->update($attributes);
+
+        return $model->fresh();
     }
 
-    public function delete($model): ?bool {
-        throw new \Exception('Method delete() not yet implemented.');
+    /**
+     * @param Cluster $model
+     *
+     * @throws EntityHasChildrenException when the cluster still has mini-grids
+     */
+    public function delete(Model $model): ?bool {
+        if ($model->miniGrids()->exists()) {
+            throw new EntityHasChildrenException('Cluster cannot be deleted while it still has mini-grids. Delete the mini-grids first.');
+        }
+
+        return $model->delete();
+    }
+
+    /**
+     * @return Collection<int, Cluster>
+     */
+    public function getAllForExport(): Collection {
+        return $this->cluster->newQuery()->with([
+            'miniGrids',
+            'cities',
+            'manager',
+        ])->get();
     }
 }

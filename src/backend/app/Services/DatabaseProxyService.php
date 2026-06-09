@@ -17,7 +17,7 @@ class DatabaseProxyService implements IBaseService {
     }
 
     public function create(array $databaseProxyData): DatabaseProxy {
-        return $this->databaseProxy->newQuery()->create($databaseProxyData);
+        return $this->databaseProxy->newQuery()->firstOrCreate($databaseProxyData);
     }
 
     public function update($model, array $data): DatabaseProxy {
@@ -25,7 +25,13 @@ class DatabaseProxyService implements IBaseService {
     }
 
     public function delete($model): ?bool {
-        throw new \Exception('Method delete() not yet implemented.');
+        return $model->delete();
+    }
+
+    public function deleteByEmail(string $email): void {
+        $this->databaseProxy->newQuery()
+            ->where(DatabaseProxy::COL_EMAIL, '=', $email)
+            ->delete();
     }
 
     /**

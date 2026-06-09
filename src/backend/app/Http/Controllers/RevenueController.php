@@ -8,14 +8,14 @@ use App\Models\Cluster;
 use App\Models\ConnectionGroup;
 use App\Models\ConnectionType;
 use App\Models\Target;
+use App\Models\Ticket\Ticket;
+use App\Models\Ticket\TicketCategory;
 use App\Models\Transaction\Transaction;
 use App\Services\MeterRevenueService;
 use App\Services\PeriodService;
 use App\Services\RevenueService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Inensus\Ticket\Models\Ticket;
-use Inensus\Ticket\Models\TicketCategory;
 
 class RevenueController extends Controller {
     public function __construct(
@@ -67,14 +67,14 @@ class RevenueController extends Controller {
 
     public function trending(int $id, Request $request): ApiResource {
         // the array which holds the final response
-        $startDate = $request->input('startDate') ?? date('Y-01-01');
-        $end = $request->input('endDate') ?? date('Y-m-d');
+        $startDate = $request->input('startDate', date('Y-01-01'));
+        $end = $request->input('endDate', date('Y-m-d'));
         $endDate = Carbon::parse($end)->endOfDay();
 
         $cities = $this->city::query()->where('mini_grid_id', $id)->get();
         $cityIds = implode(',', $cities->pluck('id')->toArray());
 
-        if (!count($cities)) {
+        if (count($cities) === 0) {
             $response = ['data' => null, 'message' => 'There is no city for this MiniGrid'];
 
             return ApiResource::make($response);
@@ -112,10 +112,6 @@ class RevenueController extends Controller {
 
     /**
      * Prepares the data for revenue dashboard.
-     *
-     * @param Request $request
-     *
-     * @return ApiResource
      */
     public function revenueData(Request $request): ApiResource {
         $startDate = date('Y-m-d', strtotime($request->get('start_date') ?? '2018-01-01'));

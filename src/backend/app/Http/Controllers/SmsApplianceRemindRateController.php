@@ -9,11 +9,7 @@ use App\Services\SmsApplianceRemindRateService;
 use Illuminate\Http\Request;
 
 class SmsApplianceRemindRateController extends Controller {
-    private SmsApplianceRemindRateService $smsApplianceRemindService;
-
-    public function __construct(SmsApplianceRemindRateService $smsApplianceRemindService) {
-        $this->smsApplianceRemindService = $smsApplianceRemindService;
-    }
+    public function __construct(private SmsApplianceRemindRateService $smsApplianceRemindService) {}
 
     public function index(): ApiResource {
         return new ApiResource($this->smsApplianceRemindService->getApplianceRemindRatesWithAppliances());
@@ -28,5 +24,9 @@ class SmsApplianceRemindRateController extends Controller {
             $smsApplianceRemindRate,
             $request->all()
         ));
+    }
+
+    public function destroy(SmsApplianceRemindRate $smsApplianceRemindRate): ApiResource {
+        return new ApiResource($this->smsApplianceRemindService->deleteApplianceRemindRate($smsApplianceRemindRate));
     }
 }

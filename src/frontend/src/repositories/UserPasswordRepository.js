@@ -1,7 +1,6 @@
-import Client from "@/repositories/Client/AxiosClient"
-import { baseUrl } from "@/repositories/Client/AxiosClient"
+import Client from "@/repositories/Client/AxiosClient.js"
 
-const resource = `${baseUrl}/api/users/password`
+const resource = `/api/users/password`
 
 export default {
   put(userData) {
@@ -10,5 +9,11 @@ export default {
   //forgotPassword
   post(email) {
     return Client.post(`${resource}`, { email: email })
+  },
+  validateToken(token) {
+    return Client.get(`${resource}/validate/${token}`)
+  },
+  confirmReset(data) {
+    return Client.post(`${resource}/confirm`, data)
   },
 }

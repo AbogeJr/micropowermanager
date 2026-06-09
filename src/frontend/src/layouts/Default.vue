@@ -40,24 +40,28 @@
         </md-button>
       </md-dialog-actions>
     </md-dialog>
-    <tail-wizard :show-wizard="showWizard" :tail="tail" />
-    <password-protection />
+    <tail-wizard
+      v-if="hasSettingsPermission"
+      :show-wizard="showWizard"
+      :tail="tail"
+    />
   </div>
 </template>
 <script>
-import FooterBar from "../layouts/FooterBar.vue"
-import { EventBus } from "@/shared/eventbus"
-import TopNavbar from "./TopNavbar.vue"
-import SideBar from "@/modules/Sidebar/SideBar"
-import MobileTopNavbar from "./MobileTopNavbar"
-import TailWizard from "@/shared/TailWizard"
 import { mapGetters } from "vuex"
-import PasswordProtection from "@/shared/PasswordProtection"
+
+import FooterBar from "../layouts/FooterBar.vue"
+
+import MobileTopNavbar from "./MobileTopNavbar.vue"
+import TopNavbar from "./TopNavbar.vue"
+
+import SideBar from "@/modules/Sidebar/SideBar.vue"
+import { EventBus } from "@/shared/eventbus.js"
+import TailWizard from "@/shared/TailWizard.vue"
 
 export default {
   name: "default",
   components: {
-    PasswordProtection,
     TopNavbar,
     FooterBar,
     SideBar,
@@ -65,6 +69,9 @@ export default {
     TailWizard,
   },
   created() {
+    if (!this.hasSettingsPermission) {
+      return
+    }
     if (this.status !== "") {
       const tail = JSON.parse(this.registrationTail.tail)
       for (const tailElement of tail) {
@@ -85,7 +92,7 @@ export default {
     showed: false,
     confirmed: false,
     expires_in: null,
-    sidebarBackground: "green",
+    sidebarBackground: "primary",
     sidebarBackgroundImage: null,
     showWizard: false,
     tail: [],
@@ -101,7 +108,16 @@ export default {
     },
     extendToken() {
       this.confirmed = true
-      location.reload()
+      this.$store
+        .dispatch("auth/refreshToken")
+        .then(() => {
+          this.active = false
+          this.showed = false
+          this.confirmed = false
+        })
+        .catch(() => {
+          EventBus.$emit("session.end", true)
+        })
     },
     logout() {
       this.$store.commit("registrationTail/SET_IS_WIZARD_SHOWN", false)
@@ -115,12 +131,16 @@ export default {
       status: "auth/getStatus",
       registrationTail: "registrationTail/getTail",
       isWizardShown: "registrationTail/getIsWizardShown",
+      permissions: "auth/getPermissions",
     }),
+    hasSettingsPermission() {
+      return (this.permissions || []).includes("settings")
+    },
   },
 }
 </script>
 
-<style lang="css" scoped>
+<style scoped lang="scss">
 .container {
   padding: 1rem;
 }

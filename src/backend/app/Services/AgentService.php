@@ -4,8 +4,10 @@ namespace App\Services;
 
 use App\Helpers\PasswordGenerator;
 use App\Models\Agent;
+use App\Models\AppliancePerson;
 use App\Services\Interfaces\IBaseService;
 use Complex\Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -14,6 +16,12 @@ use Illuminate\Pagination\LengthAwarePaginator;
  * @implements IBaseService<Agent>
  */
 class AgentService implements IBaseService {
+    /**
+     * An agent counts as active when it has recorded balance history (a payment
+     * or sale) within this many days.
+     */
+    public const ACTIVE_WINDOW_DAYS = 30;
+
     public function __construct(
         private Agent $agent,
         private PersonService $personService,
@@ -22,16 +30,14 @@ class AgentService implements IBaseService {
     public function resetPassword(string $email): string {
         try {
             $newPassword = PasswordGenerator::generatePassword();
-        } catch (Exception $exception) {
+        } catch (Exception) {
             $newPassword = (string) time();
         }
 
         try {
             $agent = $this->agent->newQuery()->where('email', $email)->firstOrFail();
-        } catch (ModelNotFoundException $x) {
-            $message = 'Invalid email.';
-
-            return $message;
+        } catch (ModelNotFoundException) {
+            return 'Invalid email.';
         }
 
         $agent->password = $newPassword;
@@ -39,6 +45,13 @@ class AgentService implements IBaseService {
         $agent->fresh();
 
         return $newPassword;
+    }
+
+    public function changePassword(Agent $agent, #[\SensitiveParameter] string $password): Agent {
+        $agent->password = $password;
+        $agent->save();
+
+        return $agent->fresh();
     }
 
     public function updateDevice(Agent $agent, string $deviceId): void {
@@ -102,15 +115,21 @@ class AgentService implements IBaseService {
      * @return Collection<int, Agent>|LengthAwarePaginator<int, Agent>
      */
     public function getAll(?int $limit = null): Collection|LengthAwarePaginator {
+        $query = $this->agent->newQuery()
+            ->select('agents.*')
+            ->addSelect(['customer_count' => AppliancePerson::query()
+                ->selectRaw('COUNT(DISTINCT person_id)')
+                ->whereColumn('creator_id', 'agents.id')
+                ->where('creator_type', $this->agent->getMorphClass())])
+            ->with(['person.addresses', 'miniGrid', 'commission'])
+            ->withCount(['soldAppliances AS sales_count'])
+            ->withExists(['balanceHistory AS is_active' => fn (Builder $query) => $query->where('created_at', '>=', now()->subDays(self::ACTIVE_WINDOW_DAYS))]);
+
         if ($limit) {
-            return $this->agent->newQuery()
-                ->with(['person', 'person.addresses', 'miniGrid', 'commission'])
-                ->paginate($limit);
+            return $query->paginate($limit);
         }
 
-        return $this->agent->newQuery()
-            ->with(['person.addresses', 'miniGrid'])
-            ->get();
+        return $query->get();
     }
 
     /**
@@ -128,6 +147,8 @@ class AgentService implements IBaseService {
         ?object $personService = null,
         ?object $personAddressService = null,
     ): Agent {
+        // Ensure the person is created with type 'agent'
+        $personData['type'] = 'agent';
         $person = $personService->create($personData);
 
         if ($country !== null) {
@@ -148,20 +169,34 @@ class AgentService implements IBaseService {
      * @param array<string, mixed> $agentData
      */
     public function update($agent, array $agentData): Agent {
-        $person = $this->personService->getById($agentData['personId']);
-        $personData = [
-            'name' => $agentData['name'],
-            'surname' => $agentData['surname'],
-            'sex' => $agentData['gender'],
-            'birth_date' => $agentData['birthday'],
-        ];
-        $person = $this->personService->update($person, $personData);
-        $address = $person->addresses()->where('is_primary', 1)->first();
-        $address->phone = $agentData['phone'];
-        $address->update();
-        $agent->person->name = $agentData['name'];
-        $agent->agent_commission_id = $agentData['commissionTypeId'];
-        $agent->update();
+        $personData = array_filter([
+            'name' => $agentData['name'] ?? null,
+            'surname' => $agentData['surname'] ?? null,
+            'gender' => $agentData['gender'] ?? null,
+            'birth_date' => $agentData['birthday'] ?? null,
+        ], fn ($value): bool => $value !== null);
+
+        if ($personData !== []) {
+            $this->personService->update($agent->person, $personData);
+        }
+
+        if (array_key_exists('phone', $agentData)) {
+            $address = $agent->person->addresses()->where('is_primary', 1)->first();
+            if ($address !== null) {
+                $address->phone = $agentData['phone'];
+                $address->update();
+            }
+        }
+
+        if (array_key_exists('commissionTypeId', $agentData)) {
+            $agent->agent_commission_id = $agentData['commissionTypeId'];
+        }
+        if (array_key_exists('miniGridId', $agentData)) {
+            $agent->mini_grid_id = $agentData['miniGridId'];
+        }
+        if ($agent->isDirty()) {
+            $agent->update();
+        }
 
         return $this->agent->with(['person', 'person.addresses', 'miniGrid', 'commission'])
             ->where('id', $agent->id)->first();

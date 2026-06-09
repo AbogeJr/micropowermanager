@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Request;
 use Laravel\Horizon\Horizon;
 use Laravel\Horizon\HorizonApplicationServiceProvider;
 
@@ -28,11 +29,16 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider {
      * This gate determines who can access Horizon in non-local environments.
      */
     protected function gate(): void {
-        Gate::define('viewHorizon', function ($user = null) {
+        Gate::define('viewHorizon', function ($user = null): bool {
             $horizon_username = config('horizon.http_basic_auth.username');
             $horizon_password = config('horizon.http_basic_auth.password');
 
             if (app()->environment('development')) {
+                return true;
+            }
+
+            // If user is authenticated and has permission, allow
+            if ($user && method_exists($user, 'can') && $user->can('horizon')) {
                 return true;
             }
 
@@ -47,8 +53,8 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider {
                 exit;
             }
 
-            return $_SERVER['PHP_AUTH_USER'] === $horizon_username
-                && $_SERVER['PHP_AUTH_PW'] === $horizon_password;
+            return Request::server('PHP_AUTH_USER') === $horizon_username
+                && Request::server('PHP_AUTH_PW') === $horizon_password;
         });
     }
 }

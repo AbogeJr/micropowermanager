@@ -1,12 +1,12 @@
-import { ErrorHandler } from "@/Helpers/ErrorHandler"
 import moment from "moment"
-import { convertObjectKeysToSnakeCase } from "@/Helpers/Utils"
-import { resources } from "@/resources"
 
-import { Paginator } from "@/Helpers/Paginator"
-import { EventBus } from "@/shared/eventbus"
-
-import PersonRepository from "@/repositories/PersonRepository"
+import { ErrorHandler } from "@/Helpers/ErrorHandler.js"
+import { Paginator } from "@/Helpers/Paginator.js"
+import { convertObjectKeysToSnakeCase } from "@/Helpers/Utils.js"
+import Client from "@/repositories/Client/AxiosClient.js"
+import PersonRepository from "@/repositories/PersonRepository.js"
+import { resources } from "@/resources.js"
+import { EventBus } from "@/shared/eventbus.js"
 
 export class Person {
   constructor() {
@@ -34,7 +34,7 @@ export class Person {
       personData.citizenship != null
         ? personData.citizenship.country_name
         : "No data available"
-    this.gender = personData.sex
+    this.gender = personData.gender
     this.addresses = personData.addresses
     this.devices = personData.devices
     this.is_active = personData.is_active
@@ -65,7 +65,7 @@ export class Person {
       data.citizenship != null
         ? data.citizenship.country_name
         : "No data available"
-    this.gender = data.sex
+    this.gender = data.gender
     this.addresses = data.addresses
     this.lastUpdate = data.updated_at
     this.devices = data.devices
@@ -81,7 +81,7 @@ export class Person {
       name: this.name,
       surname: this.surname,
       birth_date: this.birthDate,
-      sex: this.gender,
+      gender: this.gender,
       education: this.education,
     }
   }
@@ -95,7 +95,7 @@ export class Person {
     if (this.birthDate !== null) {
       this.birthDate = this.isoYear(this.birthDate)
     }
-    axios.put(resources.person.update + this.id, this.toJson())
+    Client.put(resources.person.update + this.id, this.toJson())
   }
 
   getFullName() {
@@ -189,7 +189,7 @@ export class PersonService {
           personData.citizenship != null
             ? personData.citizenship.country_name
             : "No data available",
-        gender: personData.sex,
+        gender: personData.gender,
         addresses: personData.addresses,
         devices: personData.devices,
         is_active: personData.is_active,
@@ -263,5 +263,91 @@ export class PersonService {
     }
     this.person.surname = x.splice(-1)
     this.person.name = x.join(" ")
+  }
+
+  async listDocuments(personId) {
+    try {
+      const { data, status, error } =
+        await this.repository.documents.list(personId)
+      if (status !== 200) return new ErrorHandler(error, "http", status)
+
+      return data.data
+    } catch (e) {
+      const errorMessage = e.response?.data?.message ?? e.message
+      return new ErrorHandler(errorMessage, "http")
+    }
+  }
+
+  async uploadDocument(personId, file, type, additionalJson) {
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("type", type)
+      if (additionalJson && Object.keys(additionalJson).length > 0) {
+        Object.entries(additionalJson).forEach(([key, value]) => {
+          formData.append(`additional_json[${key}]`, value)
+        })
+      }
+      const { data, status, error } = await this.repository.documents.upload(
+        personId,
+        formData,
+      )
+      if (status !== 200 && status !== 201)
+        return new ErrorHandler(error, "http", status)
+
+      return data.data
+    } catch (e) {
+      if (e.response?.status === 422) {
+        const messages = e.response.data?.message ?? {}
+        const firstKey = Object.keys(messages)[0]
+        const firstMessage = firstKey
+          ? messages[firstKey][0]
+          : e.response.data?.message
+        return new ErrorHandler(firstMessage, "http", 422)
+      }
+      const errorMessage = e.response?.data?.message ?? e.message
+      return new ErrorHandler(errorMessage, "http")
+    }
+  }
+
+  async deleteDocument(documentId) {
+    try {
+      const { data, status, error } =
+        await this.repository.documents.delete(documentId)
+      if (status !== 200) return new ErrorHandler(error, "http", status)
+
+      return data.data
+    } catch (e) {
+      const errorMessage = e.response?.data?.message ?? e.message
+      return new ErrorHandler(errorMessage, "http")
+    }
+  }
+
+  async downloadDocument(documentId, fallbackName = "document") {
+    try {
+      const response = await this.repository.documents.download(documentId)
+
+      const contentDisposition = response.headers["content-disposition"]
+      const filename =
+        contentDisposition?.split("filename=")[1]?.replace(/['"]/g, "") ??
+        fallbackName
+
+      const blob = new Blob([response.data], {
+        type: response.headers["content-type"] ?? "application/octet-stream",
+      })
+      const objectUrl = window.URL.createObjectURL(blob)
+      const anchor = document.createElement("a")
+      anchor.href = objectUrl
+      anchor.download = filename
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.URL.revokeObjectURL(objectUrl)
+
+      return true
+    } catch (e) {
+      const errorMessage = e.response?.data?.message ?? e.message
+      return new ErrorHandler(errorMessage, "http")
+    }
   }
 }

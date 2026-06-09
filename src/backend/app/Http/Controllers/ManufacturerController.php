@@ -19,21 +19,16 @@ class ManufacturerController extends Controller {
 
     /**
      * Display a listing of the resource.
-     *
-     * @return ApiResource
      */
     public function index(Request $request): ApiResource {
         $limit = $request->input('per_page');
+        $type = $request->input('type');
 
-        return ApiResource::make($this->manufacturerService->getAll($limit));
+        return ApiResource::make($this->manufacturerService->getAll($limit, $type));
     }
 
     /**
      * Store a newly created resource in storage.
-     *
-     * @param ManufacturerRequest $request
-     *
-     * @return JsonResponse
      */
     public function store(ManufacturerRequest $request): JsonResponse {
         $manufacturerData = $this->manufacturerService->createManufacturerDataFromRequest($request);
@@ -50,12 +45,8 @@ class ManufacturerController extends Controller {
 
     /**
      * Display the specified resource.
-     *
-     * @param int $manufacturerId
-     *
-     * @return ApiResource
      */
-    public function show($manufacturerId): ApiResource {
+    public function show(int $manufacturerId): ApiResource {
         return ApiResource::make($this->manufacturerService->getById($manufacturerId));
     }
 }

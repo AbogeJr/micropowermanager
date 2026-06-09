@@ -2,7 +2,7 @@
   <div class="col-sm-12">
     <widget
       :subscriber="subscriber"
-      color="green"
+      color="primary"
       :title="$tc('phrases.userTicket', 2)"
       :paginator="tickets.paginator"
       :button="true"
@@ -21,16 +21,24 @@
     <md-dialog :md-active.sync="showModal">
       <md-dialog-title>{{ $tc("phrases.newTicket") }}</md-dialog-title>
       <md-dialog-content class="md-scrollbar">
-        <form novalidate class="md-layout md-gutter">
+        <form class="md-layout md-gutter">
           <div class="md-layout-item md-size-100">
-            <md-field name="title">
+            <md-field
+              :class="{
+                'md-invalid': errors.has($tc('words.title')),
+              }"
+            >
               <label for="title">{{ $tc("words.title") }}</label>
               <md-input
                 type="text"
                 v-model="newTicket.title"
                 id="title"
-                name="title"
+                :name="$tc('words.title')"
+                v-validate="'required|min:3'"
               />
+              <span class="md-error">
+                {{ errors.first($tc("words.title")) }}
+              </span>
             </md-field>
           </div>
 
@@ -47,14 +55,19 @@
             </md-datepicker>
           </div>
           <div class="md-layout-item md-size-100">
-            <md-field name="ticketPriority">
+            <md-field
+              :class="{
+                'md-invalid': errors.has($tc('words.category')),
+              }"
+            >
               <label for="ticketPriority">
                 {{ $tc("words.category") }}
               </label>
               <md-select
                 v-model="newTicket.label"
-                name="ticketPriority"
+                :name="$tc('words.category')"
                 id="ticketPriority"
+                v-validate="'required'"
               >
                 <md-option value="0" disabled>
                   -- {{ $tc("words.select") }} --
@@ -67,6 +80,9 @@
                   {{ label.label_name }}
                 </md-option>
               </md-select>
+              <span class="md-error">
+                {{ errors.first($tc("words.category")) }}
+              </span>
             </md-field>
           </div>
 
@@ -95,16 +111,24 @@
           </div>
 
           <div class="md-layout-item md-size-100">
-            <md-field>
+            <md-field
+              :class="{
+                'md-invalid': errors.has($tc('words.description')),
+              }"
+            >
               <label for="description">
                 {{ $tc("words.description") }}
               </label>
               <md-textarea
                 type="text"
                 id="description"
-                name="description"
+                :name="$tc('words.description')"
                 v-model="newTicket.description"
+                v-validate="'required|min:3'"
               />
+              <span class="md-error">
+                {{ errors.first($tc("words.description")) }}
+              </span>
             </md-field>
           </div>
           <md-dialog-actions class="md-layout-item md-size-100">
@@ -123,20 +147,22 @@
 </template>
 
 <script>
-import Widget from "@/shared/Widget.vue"
-import { Ticket, UserTickets } from "@/services/TicketService"
-import { resources } from "@/resources"
-import { EventBus } from "@/shared/eventbus"
-import { Paginator } from "@/Helpers/Paginator"
 import moment from "moment"
-import { TicketUserService } from "@/services/TicketUserService"
-import { TicketLabelService } from "@/services/TicketLabelService"
-import TicketItem from "../../shared/TicketItem"
-import { baseUrl } from "@/repositories/Client/AxiosClient"
+
+import { notify } from "@/mixins/notify.js"
+import Client from "@/repositories/Client/AxiosClient.js"
+import { resources } from "@/resources.js"
+import { TicketLabelService } from "@/services/TicketLabelService.js"
+import { UserTickets } from "@/services/TicketService.js"
+import { TicketUserService } from "@/services/TicketUserService.js"
+import { EventBus } from "@/shared/eventbus.js"
+import TicketItem from "@/shared/TicketItem.vue"
+import Widget from "@/shared/Widget.vue"
 
 export default {
   name: "Ticket",
   components: { TicketItem, Widget },
+  mixins: [notify],
   props: {
     personId: {
       required: true,
@@ -149,7 +175,6 @@ export default {
       subscriber: "userTickets",
       tickets: new UserTickets(this.personId),
       showPriceInput: false,
-      paginator: null,
       tableHeads: [
         this.$tc("words.subject"),
         this.$tc("words.category"),
@@ -189,7 +214,6 @@ export default {
 
   mounted() {
     EventBus.$on("pageLoaded", this.reloadList)
-    //this.getTickets();
     this.getUsers()
     this.getLabels()
     this.$on("close", function () {
@@ -212,6 +236,7 @@ export default {
 
       if (category.out_source === 1) {
         this.showPriceInput = true
+        this.newTicket.outsourcing = 1
       }
     },
     reloadList(sub, data) {
@@ -225,6 +250,23 @@ export default {
     },
     closeModal() {
       this.showModal = false
+      this.resetForm()
+      this.$validator.reset()
+    },
+    resetForm() {
+      this.newTicket = {
+        title: "",
+        description: "",
+        dueDate: null,
+        label: null,
+        assignedPerson: null,
+        owner_id: this.personId,
+        owner_type: "person",
+        creator:
+          this.$store.getters["auth/authenticationService"].authenticateUser.id,
+        outsourcing: 0,
+      }
+      this.showPriceInput = false
     },
     openModal() {
       this.showModal = true
@@ -240,25 +282,6 @@ export default {
         date.getUTCDate() < 10 ? "0" + date.getUTCDate() : date.getUTCDate()
       this.newTicket.dueDate = day + "." + month + "." + year
     },
-    getTickets(pageNumber = 1) {
-      let personId = this.personId
-      this.loaded = false
-
-      if (this.paginator === null)
-        this.paginator = new Paginator(resources.ticket.getUser + personId)
-
-      this.paginator.loadPage(pageNumber).then((response) => {
-        this.loaded = true
-        this.tickets = []
-
-        for (let i in response.data) {
-          let t = new Ticket()
-          let data = response.data[i]
-
-          this.tickets.push(t.fromJson(data))
-        }
-      })
-    },
     closeTicket(ticket) {
       ticket.close()
     },
@@ -273,7 +296,21 @@ export default {
       this.labels = await this.ticketLabelService.getLabels()
     },
 
-    saveTicket() {
+    async saveTicket() {
+      if (!this.$can("tickets")) {
+        this.alertNotify(
+          "error",
+          "You do not have permission to create tickets",
+        )
+        return
+      }
+
+      // Validate all fields
+      const validator = await this.$validator.validateAll()
+      if (!validator) {
+        return
+      }
+
       //validate ticket
       if (this.showPriceInput && this.newTicket.outsourcing === 0) {
         this.$swal({
@@ -284,19 +321,40 @@ export default {
         return
       }
 
-      axios.post(baseUrl + resources.ticket.create, this.newTicket).then(() => {
+      const newTicketParams = {
+        ...this.newTicket,
+        dueDate: this.newTicket.dueDate
+          ? moment(this.newTicket.dueDate).format("YYYY-MM-DD HH:mm:ss")
+          : null,
+      }
+
+      try {
+        await Client.post(resources.ticket.create, newTicketParams)
+        this.alertNotify("success", "Ticket created successfully.")
+        // Refresh ticket list
         EventBus.$emit(
           "widgetContentLoaded",
           this.subscriber,
           this.tickets.list.length,
         )
         this.resetKey++
-      })
-
-      this.$emit("close")
+        // Reset form and close modal
+        this.resetForm()
+        this.closeModal()
+      } catch (error) {
+        console.error("Error creating ticket:", error)
+        if (error.response && error.response.status === 403) {
+          this.alertNotify(
+            "error",
+            "You do not have permission to create tickets",
+          )
+        } else {
+          this.alertNotify("error", error.message)
+        }
+      }
     },
   },
 }
 </script>
 
-<style scoped></style>
+<style scoped lang="scss"></style>

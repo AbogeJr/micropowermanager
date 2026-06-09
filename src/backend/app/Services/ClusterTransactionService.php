@@ -10,16 +10,17 @@ class ClusterTransactionService {
     /**
      * Get total transaction amount by cluster ID within a date range.
      *
-     * @param int                $clusterId
      * @param array<int, string> $range
-     *
-     * @return float
      */
     public function getById(int $clusterId, array $range): float {
         return $this->transaction->newQuery()->whereHas(
-            'device',
+            'device.person.addresses',
             function ($q) use ($clusterId) {
-                $q->whereHas('address', fn ($q) => $q->whereHas('city', fn ($q) => $q->where('cluster_id', $clusterId)));
+                $q->where('is_primary', 1)->whereHas('city', function ($q) use ($clusterId) {
+                    $q->whereHas('cluster', function ($q) use ($clusterId) {
+                        $q->where('clusters.id', $clusterId);
+                    });
+                });
             }
         )->whereHasMorph(
             'originalTransaction',

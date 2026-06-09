@@ -7,8 +7,6 @@ use Illuminate\Foundation\Http\FormRequest;
 class CreateAgentCommissionRequest extends FormRequest {
     /**
      * Determine if the user is authorized to make this request.
-     *
-     * @return bool
      */
     public function authorize(): bool {
         return true;
@@ -21,10 +19,10 @@ class CreateAgentCommissionRequest extends FormRequest {
      */
     public function rules(): array {
         return [
-            'name' => 'required',
-            'energy_commission' => 'required|numeric',
-            'appliance_commission' => 'required|numeric',
-            'risk_balance' => 'required|numeric|max:0',
+            'name' => ['required'],
+            'energy_commission' => ['required', 'numeric'],
+            'appliance_commission' => ['required', 'numeric'],
+            'risk_balance' => ['required', 'numeric', 'max:0'],
         ];
     }
 }

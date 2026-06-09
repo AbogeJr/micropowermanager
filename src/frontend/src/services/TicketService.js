@@ -1,7 +1,8 @@
-import { ErrorHandler } from "@/Helpers/ErrorHandler"
-import { Paginator } from "@/Helpers/Paginator"
-import { resources } from "@/resources"
-import TicketRepository from "@/repositories/TicketRepository"
+import { ErrorHandler } from "@/Helpers/ErrorHandler.js"
+import { Paginator } from "@/Helpers/Paginator.js"
+import Client from "@/repositories/Client/AxiosClient.js"
+import TicketRepository from "@/repositories/TicketRepository.js"
+import { resources } from "@/resources.js"
 
 export class Ticket {
   constructor() {
@@ -23,19 +24,23 @@ export class Ticket {
     this.title = ticketData.title
     this.description = ticketData.content
     this.due = ticketData.due_date
-    this.category = ticketData.category.label_name
+    this.category = ticketData.category?.label_name || "-"
     this.closed = ticketData.status === 1
     this.status = ticketData.status
+    this.owner = ticketData.owner
+    this.assignedTo = ticketData.assigned_to
 
-    if (comments) {
+    if (comments && Array.isArray(comments)) {
       const commentList = comments.map(function (comment) {
         return {
           comment: comment.comment,
           date: comment.created_at,
-          username: comment.ticket_user.user_name,
+          username: comment.ticket_user?.user_name || "Unknown",
         }
       })
       this.comments = commentList
+    } else {
+      this.comments = []
     }
 
     return this
@@ -46,11 +51,11 @@ export class Ticket {
   }
 
   close() {
-    axios
-      .delete(resources.ticket.close, { data: { ticketId: this.id } })
-      .then(() => {
+    Client.delete(resources.ticket.close, { data: { ticketId: this.id } }).then(
+      () => {
         this.closed = true
-      })
+      },
+    )
   }
 }
 
@@ -76,15 +81,25 @@ export class UserTickets {
 
   updateList(data) {
     this.list = []
-    if ("data" in data) {
-      this.list = data.data.map(function (ticket) {
+
+    let ticketsArray = []
+
+    // Handle both cases: array directly or object with data property
+    if (Array.isArray(data)) {
+      ticketsArray = data
+    } else if (data && "data" in data && Array.isArray(data.data)) {
+      ticketsArray = data.data
+    }
+
+    if (ticketsArray.length > 0) {
+      this.list = ticketsArray.map(function (ticket) {
         return new Ticket().fromJson(ticket)
       })
     }
   }
 
   newComment(commentData) {
-    axios.post(resources.ticket.comments, commentData)
+    Client.post(resources.ticket.comments, commentData)
   }
 }
 
@@ -102,7 +117,7 @@ export class TicketService {
     if (type === "ticketListOpened") this.openedList = []
     else this.closedList = []
 
-    const result = data?.data?.map((ticket) => {
+    const result = data?.map((ticket) => {
       return {
         created: ticket.created_at,
         id: ticket.id,
@@ -149,13 +164,13 @@ export class TicketService {
       description: maintenanceData.description,
       title: maintenanceData.title,
       owner_id: maintenanceData.assigned.id,
-      owner_type: "maintenance_user",
+      owner_type: "person",
       creator_type: "admin",
     }
     try {
       let response = await this.repository.create(maintenanceDataPM)
       if (response.status === 200 || response.status === 201) {
-        return response.data.data
+        return response.data
       } else {
         return new ErrorHandler(response.error, "http", response.status)
       }

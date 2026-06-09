@@ -1,7 +1,6 @@
-import Client from "@/repositories/Client/AxiosClient"
-import { baseUrl } from "@/repositories/Client/AxiosClient"
+import Client from "@/repositories/Client/AxiosClient.js"
 
-const resource = `${baseUrl}/api/mini-grids`
+const resource = `/api/mini-grids`
 
 export default {
   list() {
@@ -9,6 +8,12 @@ export default {
   },
   create(miniGridPM) {
     return Client.post(`${resource}`, miniGridPM)
+  },
+  update(miniGridId, miniGrid) {
+    return Client.put(`${resource}/${miniGridId}`, miniGrid)
+  },
+  delete(miniGridId) {
+    return Client.delete(`${resource}/${miniGridId}`)
   },
   get(miniGridId) {
     return Client.get(`${resource}/${miniGridId}`)

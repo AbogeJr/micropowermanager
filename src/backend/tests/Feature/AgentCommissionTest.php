@@ -3,13 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\AgentCommission;
+use Tests\CreateEnvironments;
 use Tests\TestCase;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AgentCommissionTest extends TestCase {
     use CreateEnvironments;
 
-    public function testUserGetsAgentCommissionList() {
+    public function testUserGetsAgentCommissionList(): void {
         $this->createTestData();
         $agentCommissionCount = 5;
         $this->createAgentCommission($agentCommissionCount);
@@ -18,7 +18,7 @@ class AgentCommissionTest extends TestCase {
         $this->assertEquals(count($response['data']), $agentCommissionCount);
     }
 
-    public function testUserCreatesAgentCommission() {
+    public function testUserCreatesAgentCommission(): void {
         $this->createTestData();
         $this->createCluster();
         $this->createMiniGrid();
@@ -32,11 +32,11 @@ class AgentCommissionTest extends TestCase {
         ];
         $response = $this->actingAs($this->user)->post('/api/agents/commissions', $postData);
         $response->assertStatus(201);
-        $lastCreatedAgentCommission = AgentCommission::query()->latest()->first();
+        $lastCreatedAgentCommission = AgentCommission::query()->latest('id')->first();
         $this->assertEquals($lastCreatedAgentCommission->name, $response['data']['name']);
     }
 
-    public function testUserCanUpdateAnAgentCommission() {
+    public function testUserCanUpdateAnAgentCommission(): void {
         $this->createTestData();
         $this->createAgentCommission();
         $putData = [
@@ -57,19 +57,12 @@ class AgentCommissionTest extends TestCase {
         $this->assertEquals($putData['risk_balance'], $response['data']['risk_balance']);
     }
 
-    public function testUserCanDeleteAnAgent() {
+    public function testUserCanDeleteAnAgent(): void {
         $this->createTestData();
         $this->createAgentCommission();
         $response = $this->actingAs($this->user)->delete(sprintf('/api/agents/commissions/%s', $this->agentCommissions[0]->id));
+        $this->assertEquals('Agent commission deleted successfully', $response['message']);
         $agentsCount = AgentCommission::query()->get()->count();
         $this->assertEquals(0, $agentsCount);
-    }
-
-    public function actingAs($user, $driver = null) {
-        $token = JWTAuth::fromUser($user);
-        $this->withHeader('Authorization', "Bearer {$token}");
-        parent::actingAs($user);
-
-        return $this;
     }
 }

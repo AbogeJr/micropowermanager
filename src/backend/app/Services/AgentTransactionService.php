@@ -27,7 +27,12 @@ class AgentTransactionService implements IAgentTransactionService {
         $query = $this->transaction->newQuery();
 
         if ($forApp) {
-            $query->with(['originalTransaction', 'device' => fn ($q) => $q->whereHas('person')->with(['device', 'person'])]);
+            $query->with([
+                'originalTransaction',
+                'device' => fn ($q) => $q->whereHas('person')->with(['device', 'person']),
+                'nonPaygoAppliance.person',
+                'nonPaygoAppliance.appliance',
+            ]);
         } else {
             $query->with(['device' => fn ($q) => $q->whereHas('person')->with(['device', 'person'])]);
         }
@@ -38,11 +43,9 @@ class AgentTransactionService implements IAgentTransactionService {
             static function ($q) use ($agentId) {
                 $q->where('agent_id', $agentId);
             }
-        );
+        )->latest()->orderByDesc('id');
 
-        $transactions = $limit ? $query->paginate($limit) : $query->get();
-
-        return $transactions;
+        return $limit ? $query->paginate($limit) : $query->get();
     }
 
     /**
@@ -56,7 +59,7 @@ class AgentTransactionService implements IAgentTransactionService {
             return new Collection();
         }
 
-        $transactions = $this->transaction->newQuery()
+        return $this->transaction->newQuery()
             ->with(['originalTransaction', 'device' => fn ($q) => $q->whereHas('person')->with(['device', 'person'])])
             ->whereHasMorph(
                 'originalTransaction',
@@ -65,13 +68,28 @@ class AgentTransactionService implements IAgentTransactionService {
             )
             ->whereHas('device', fn ($q) => $q->whereIn('device_serial', $customerDeviceSerials))
             ->latest()
+            ->orderByDesc('id')
             ->paginate();
-
-        return $transactions;
     }
 
     public function getById(int $id): AgentTransaction {
         throw new \Exception('Method getById() not yet implemented.');
+    }
+
+    /**
+     * Find a transaction owned by the given agent and eager-load its token.
+     * Returns null if the transaction doesn't exist or doesn't belong to the agent.
+     */
+    public function findForAgent(int $agentId, int $transactionId): ?Transaction {
+        return $this->transaction->newQuery()
+            ->with(['token'])
+            ->whereHasMorph(
+                'originalTransaction',
+                [AgentTransaction::class],
+                fn ($q) => $q->where('agent_id', $agentId)
+            )
+            ->where('id', $transactionId)
+            ->first();
     }
 
     /**

@@ -39,6 +39,20 @@ chmod -R 775 /var/www/html/storage
 
 # DEVCONTAINER PLACEHOLDER (DO NOT REMOVE THIS LINE)
 
+# If running in production, generate Laravel caches so the app is optimized.
+# We do this at container startup (not build) so runtime environment variables are available to the framework.
+if [ "$APP_ENV" = "production" ] || ( [ -n "$MPM_FORCE_OPTIMIZE" ] && [ "$MPM_FORCE_OPTIMIZE" != "0" ] && [ "$MPM_FORCE_OPTIMIZE" != "false" ] ); then
+  cd /var/www/html
+  echo "Optimizing Laravel (caching config, events, routes, views)..."
+  # Currently, we cannot run `artisan optimize` as `artisan config:cache` fails
+  # due to the way we have use closures in `FilterHandler`.
+  # See: https://github.com/Seldaek/monolog/issues/1965
+  # gosu www-data php artisan optimize || echo "php artisan optimize failed"
+  gosu www-data php artisan event:cache || echo "php artisan event:cache failed"
+  gosu www-data php artisan route:cache || echo "php artisan route:cache failed"
+  gosu www-data php artisan view:cache || echo "php artisan view:cache failed"
+fi
+
 printenv > /etc/environment
 
 echo "cron starting..."

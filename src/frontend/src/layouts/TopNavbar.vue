@@ -12,7 +12,7 @@
               <md-tooltip md-direction="bottom">
                 {{ $tc("words.location", 2) }}
               </md-tooltip>
-              <md-icon class="c-white">add_location_alt</md-icon>
+              <md-icon>add_location_alt</md-icon>
               <small>{{ $tc("words.location", 2) }}</small>
             </md-button>
             <md-menu-content>
@@ -21,35 +21,41 @@
                 <md-icon>add_location_alt</md-icon>
               </md-menu-item>
               <md-divider></md-divider>
-              <md-menu-item @click="replaceRoute('/locations/add-cluster')">
+              <md-menu-item @click="navigateRoute('/locations/add-cluster')">
                 {{ $tc("menu.subMenu.addCluster") }}
               </md-menu-item>
-              <md-menu-item @click="replaceRoute('/locations/add-mini-grid')">
+              <md-menu-item @click="navigateRoute('/locations/add-mini-grid')">
                 {{ $tc("menu.subMenu.addMiniGrid") }}
               </md-menu-item>
-              <md-menu-item @click="replaceRoute('/locations/add-village')">
+              <md-menu-item @click="navigateRoute('/locations/add-village')">
                 {{ $tc("menu.subMenu.addVillage") }}
+              </md-menu-item>
+              <md-menu-item @click="navigateRoute('/locations/villages')">
+                {{ $tc("menu.subMenu.manageVillages") }}
               </md-menu-item>
             </md-menu-content>
           </md-menu>
           <md-menu class="menu-item" md-direction="bottom-end" md-size="big">
             <md-button class="md-dense nav-button md-raised" md-menu-trigger>
               <md-tooltip md-direction="bottom">
-                {{ $tc("menu.subMenu.Settings") }}
+                {{ $tc("menu.subMenu.Config") }}
               </md-tooltip>
-              <md-icon class="c-white">settings</md-icon>
-              <small>{{ $tc("menu.subMenu.Settings") }}</small>
+              <md-icon>settings</md-icon>
+              <small>{{ $tc("menu.subMenu.Config") }}</small>
             </md-button>
             <md-menu-content>
               <md-menu-item disabled>
-                <span>{{ $tc("menu.subMenu.Settings") }}</span>
+                <span>{{ $tc("menu.subMenu.Config") }}</span>
                 <md-icon>settings</md-icon>
               </md-menu-item>
               <md-divider></md-divider>
-              <md-menu-item @click="replaceRoute('/settings/configuration')">
-                <span>{{ $tc("menu.subMenu.Config") }}</span>
+              <md-menu-item @click="navigateRoute('/settings/configuration')">
+                <span>{{ $tc("menu.subMenu.Settings") }}</span>
               </md-menu-item>
-              <md-menu-item @click="replaceRoute('/settings/user-management')">
+              <md-menu-item @click="navigateRoute('/settings/import')">
+                <span>Import</span>
+              </md-menu-item>
+              <md-menu-item @click="navigateRoute('/settings/user-management')">
                 {{ $tc("phrases.userManagement") }}
               </md-menu-item>
               <md-menu-item disabled="">
@@ -57,20 +63,22 @@
                 <md-icon>cast</md-icon>
               </md-menu-item>
               <md-menu-item
-                @click="replaceRoute('/settings/connection-groups')"
+                @click="navigateRoute('/settings/connection-groups')"
               >
                 {{ $tc("words.group", 2) }}
               </md-menu-item>
-              <md-menu-item @click="replaceRoute('/settings/connection-types')">
+              <md-menu-item
+                @click="navigateRoute('/settings/connection-types')"
+              >
                 {{ $tc("words.type", 2) }}
               </md-menu-item>
             </md-menu-content>
           </md-menu>
           <md-menu class="menu-item" md-direction="bottom-end" md-size="big">
             <md-button class="nav-button md-raised md-dense" md-menu-trigger>
-              <md-icon class="c-white">person</md-icon>
+              <md-icon>person</md-icon>
               <small>{{ adminName }}</small>
-              <md-icon class="c-white">keyboard_arrow_down</md-icon>
+              <md-icon>keyboard_arrow_down</md-icon>
             </md-button>
             <md-menu-content>
               <div class="author-card">
@@ -82,7 +90,7 @@
                 </div>
                 <hr />
               </div>
-              <md-menu-item @click="replaceRoute('/profile')">
+              <md-menu-item @click="navigateRoute('/profile')">
                 {{ $tc("words.profile") }}
               </md-menu-item>
               <md-menu-item @click="logout()">
@@ -97,7 +105,7 @@
 </template>
 
 <script>
-import Breadcrumb from "../shared/Breadcrumb"
+import Breadcrumb from "../shared/Breadcrumb.vue"
 
 export default {
   components: {
@@ -118,8 +126,8 @@ export default {
     toggle() {
       this.toggleCard = !this.toggleCard
     },
-    replaceRoute(route) {
-      this.$router.replace(route)
+    navigateRoute(route) {
+      this.$router.push(route).catch(() => {})
     },
   },
   computed: {
@@ -130,10 +138,17 @@ export default {
 }
 </script>
 
-<style lang="css">
-.nav-button {
-  background-color: #3d3d3d !important;
-  color: white !important;
+<style scoped lang="scss">
+.md-button.md-theme-default.md-raised.nav-button {
+  background-color: #3d3d3d;
+}
+
+.md-toolbar.md-theme-default * {
+  color: white;
+}
+
+.md-toolbar.md-theme-default .md-icon {
+  color: white;
 }
 
 .menu-item {
@@ -148,9 +163,5 @@ export default {
   font-weight: 300;
   padding: 1vh;
   margin-top: 0;
-}
-
-.c-white {
-  color: white;
 }
 </style>

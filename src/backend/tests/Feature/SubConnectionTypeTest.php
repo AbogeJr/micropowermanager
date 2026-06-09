@@ -2,25 +2,27 @@
 
 namespace Tests\Feature;
 
+use App\Models\SubConnectionType;
+use Tests\CreateEnvironments;
 use Tests\TestCase;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class SubConnectionTypeTest extends TestCase {
     use CreateEnvironments;
 
-    public function testUserGetsSubConnectionTypeList() {
+    public function testUserGetsSubConnectionTypeList(): void {
         $connectionTypeCount = 1;
         $subConnectionTypeCount = 1;
         $meterTariffCount = 1;
         $this->createTestData();
         $this->createMeterTariff($meterTariffCount);
         $this->createConnectionType($connectionTypeCount, $subConnectionTypeCount);
+        $expectedCount = SubConnectionType::query()->count();
         $response = $this->actingAs($this->user)->get('/api/sub-connection-types');
         $response->assertStatus(200);
-        $this->assertEquals(count($response['data']), count($this->subConnectionTypes));
+        $this->assertCount($expectedCount, $response['data']);
     }
 
-    public function testUserGetsSubConnectionTypesByConnectionTypeId() {
+    public function testUserGetsSubConnectionTypesByConnectionTypeId(): void {
         $connectionTypeCount = 2;
         $subConnectionTypeCount = 1;
         $meterTariffCount = 1;
@@ -35,7 +37,7 @@ class SubConnectionTypeTest extends TestCase {
         $this->assertEquals($response['data'][0]['connection_type_id'], $this->connectonTypes[0]->id);
     }
 
-    public function testUserCreatesNewSubConnectionType() {
+    public function testUserCreatesNewSubConnectionType(): void {
         $connectionTypeCount = 1;
         $subConnectionTypeCount = 0;
         $meterTariffCount = 1;
@@ -52,7 +54,7 @@ class SubConnectionTypeTest extends TestCase {
         $this->assertEquals($response['data']['name'], $subConnectionTypeData['name']);
     }
 
-    public function testUserUpdatesASubConnectionType() {
+    public function testUserUpdatesASubConnectionType(): void {
         $connectionTypeCount = 1;
         $subConnectionTypeCount = 1;
         $meterTariffCount = 1;
@@ -66,13 +68,5 @@ class SubConnectionTypeTest extends TestCase {
         ), $subConnectionTypeData);
         $response->assertStatus(200);
         $this->assertEquals($response['data']['name'], $subConnectionTypeData['name']);
-    }
-
-    public function actingAs($user, $driver = null) {
-        $token = JWTAuth::fromUser($user);
-        $this->withHeader('Authorization', "Bearer {$token}");
-        parent::actingAs($user);
-
-        return $this;
     }
 }

@@ -6,14 +6,13 @@ use App\Http\Requests\CreateAgentCommissionRequest;
 use App\Http\Resources\ApiResource;
 use App\Services\AgentCommissionService;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\JsonResponse;
 
 class AgentCommissionWebController extends Controller {
     public function __construct(private AgentCommissionService $agentCommissionService) {}
 
     /**
      * Display a listing of the resource.
-     *
-     * @return ApiResource
      */
     public function index(Request $request): ApiResource {
         $limit = $request->input('per_page');
@@ -23,8 +22,6 @@ class AgentCommissionWebController extends Controller {
 
     /**
      * Store a newly created resource in storage.
-     *
-     * @param CreateAgentCommissionRequest $request
      *
      * @return ApiResource
      */
@@ -36,11 +33,6 @@ class AgentCommissionWebController extends Controller {
 
     /**
      * Update the specified resource in storage.
-     *
-     * @param                              $agentCommissionId
-     * @param CreateAgentCommissionRequest $request
-     *
-     * @return ApiResource
      */
     public function update(int $agentCommissionId, CreateAgentCommissionRequest $request): ApiResource {
         $agentCommission = $this->agentCommissionService->getById($agentCommissionId);
@@ -50,14 +42,14 @@ class AgentCommissionWebController extends Controller {
 
     /**
      * Remove the specified resource from storage.
-     *
-     * @param $agentCommissionId
-     *
-     * @return ApiResource
      */
-    public function destroy(int $agentCommissionId): ApiResource {
+    public function destroy(int $agentCommissionId): JsonResponse {
         $agentCommission = $this->agentCommissionService->getById($agentCommissionId);
 
-        return ApiResource::make($this->agentCommissionService->delete($agentCommission));
+        $this->agentCommissionService->delete($agentCommission);
+
+        return response()->json([
+            'message' => 'Agent commission deleted successfully',
+        ]);
     }
 }

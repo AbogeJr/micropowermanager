@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\ApiResource;
+use App\Services\TransactionService;
 use Illuminate\Http\Request;
-use MPM\Transaction\TransactionService;
 
 class TransactionAdvancedController extends Controller {
     public function __construct(
@@ -12,21 +12,24 @@ class TransactionAdvancedController extends Controller {
     ) {}
 
     public function searchAdvanced(Request $request): ApiResource {
-        $type = $request->input('deviceType') ?: 'meter';
+        $deviceType = $request->input('deviceType') ?: 'all';
         $serialNumber = $request->input('serial_number');
         $tariffId = $request->input('tariff');
         $transactionProvider = $request->input('provider');
+        if (in_array($transactionProvider, [null, '', '-1'], true)) {
+            $transactionProvider = 'all';
+        }
         $status = $request->input('status');
         $fromDate = $request->input('from');
         $toDate = $request->input('to');
-        $limit = (int) ($request->input('per_page') ?? '15');
-        $transactionService = $this->transactionService->getRelatedService($type);
+        $limit = $request->integer('per_page', 15);
 
-        return ApiResource::make($transactionService->search(
+        return ApiResource::make($this->transactionService->search(
+            $deviceType,
             $serialNumber,
-            $tariffId,
+            $tariffId !== null ? (int) $tariffId : null,
             $transactionProvider,
-            $status,
+            $status !== null ? (int) $status : null,
             $fromDate,
             $toDate,
             $limit
@@ -41,9 +44,9 @@ class TransactionAdvancedController extends Controller {
         // get transactions for both current and previous periods
         $transactions = $this->transactionService->getByComparisonPeriod($comparisonPeriod);
         // get data for the current period
-        $currentTransactions = $this->transactionService->getAnalysis($transactions['current']->toArray()) ?? $this->transactionService->getEmptyCompareResult();
+        $currentTransactions = $this->transactionService->getAnalysis($transactions['current']->all()) ?? $this->transactionService->getEmptyCompareResult();
         // get data for the previous period
-        $pastTransactions = $this->transactionService->getAnalysis($transactions['past']->toArray()) ?? $this->transactionService->getEmptyCompareResult();
+        $pastTransactions = $this->transactionService->getAnalysis($transactions['past']->all()) ?? $this->transactionService->getEmptyCompareResult();
 
         // compare current period with the previous period
         return [

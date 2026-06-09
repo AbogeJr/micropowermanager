@@ -3,6 +3,8 @@ import { h } from "vue"
 import type { Theme } from "vitepress"
 import DefaultTheme from "vitepress/theme"
 import "./style.css"
+import Roadmap from "./components/Roadmap.vue"
+import Cloud from "./components/Cloud.vue"
 
 export default {
   extends: DefaultTheme,
@@ -12,6 +14,7 @@ export default {
     })
   },
   enhanceApp({ app, router, siteData }) {
-    // ...
+    app.component("Roadmap", Roadmap)
+    app.component("Cloud", Cloud)
   },
 } satisfies Theme

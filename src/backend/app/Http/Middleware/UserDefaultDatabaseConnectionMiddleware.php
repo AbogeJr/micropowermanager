@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Services\ApiCompanyResolverService;
+use App\Services\ApiResolvers\Data\ApiResolverMap;
+use App\Services\DatabaseProxyManagerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
-use MPM\DatabaseProxy\DatabaseProxyManagerService;
-use MPM\TenantResolver\ApiCompanyResolverService;
-use MPM\TenantResolver\ApiResolvers\Data\ApiResolverMap;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Tymon\JWTAuth\JWT;
+use Tymon\JWTAuth\JWTGuard;
 
 /**
  * The goal is to have the database connection on each incomming http request.
@@ -22,6 +24,7 @@ class UserDefaultDatabaseConnectionMiddleware {
         private DatabaseProxyManagerService $databaseProxyManager,
         private ApiCompanyResolverService $apiCompanyResolverService,
         private ApiResolverMap $apiResolverMap,
+        private JWT $jwt,
     ) {}
 
     public function handle(Request $request, \Closure $next): SymfonyResponse {
@@ -47,15 +50,19 @@ class UserDefaultDatabaseConnectionMiddleware {
     }
 
     private function resolveRoute(Request $request, \Closure $next): SymfonyResponse {
-        // webclient login
-        if ($request->path() === 'api/auth/login' || $request->path() === 'api/app/login') {
+        // unauthenticated endpoints that identify the company via email in the body
+        if (in_array($request->path(), [
+            'api/auth/login',
+            'api/app/login',
+            'api/app/reset-password',
+        ], true)) {
             $databaseProxy = $this->databaseProxyManager->findByEmail($request->input('email'));
             $companyId = $databaseProxy->getCompanyId();
         } elseif ($this->isAgentApp($request->path()) && Str::contains($request->path(), 'login')) { // agent app login
             $databaseProxy = $this->databaseProxyManager->findByEmail($request->input('email'));
             $companyId = $databaseProxy->getCompanyId();
         } elseif ($this->isAgentApp($request->path())) { // agent app authenticated user requests
-            /** @var \Tymon\JWTAuth\JWTGuard */
+            /** @var JWTGuard */
             $guard = auth('agent_api');
             $companyId = $guard->payload()->get('companyId');
             if (!is_numeric($companyId)) {
@@ -64,9 +71,7 @@ class UserDefaultDatabaseConnectionMiddleware {
         } elseif ($this->resolveThirdPartyApi($request->path())) {
             $companyId = $this->apiCompanyResolverService->resolve($request);
         } else { // web client authenticated user requests
-            /** @var \Tymon\JWTAuth\JWTGuard */
-            $guard = auth('api');
-            $companyId = $guard->payload()->get('companyId');
+            $companyId = $this->resolveCompanyId($request);
             if (!is_numeric($companyId)) {
                 throw new \Exception('JWT is not provided');
             }
@@ -77,6 +82,30 @@ class UserDefaultDatabaseConnectionMiddleware {
 
             return $next($request);
         });
+    }
+
+    /**
+     * Resolve the companyId claim from the bearer token for web client requests.
+     *
+     * The /api/auth/refresh endpoint must accept expired-but-refreshable tokens,
+     * so we decode under tymon's refresh flow there -- signature and refresh_ttl
+     * are still enforced, only the exp check is relaxed.
+     */
+    private function resolveCompanyId(Request $request): mixed {
+        if ($request->path() === 'api/auth/refresh') {
+            $manager = $this->jwt->manager();
+            $manager->setRefreshFlow(true);
+            try {
+                return $this->jwt->parseToken()->getPayload()->get('companyId');
+            } finally {
+                $manager->setRefreshFlow(false);
+            }
+        }
+
+        /** @var JWTGuard */
+        $guard = auth('api');
+
+        return $guard->payload()->get('companyId');
     }
 
     private function resolveThirdPartyApi(string $requestPath): bool {
@@ -99,7 +128,11 @@ class UserDefaultDatabaseConnectionMiddleware {
 
         if (Str::startsWith($path, [
             'horizon',
+            'telescope',
             'laravel-erd',
+            'api/users/password',
+            'api/mpm-plugins',
+            'docs/api',
         ])) {
             return true;
         }
@@ -107,7 +140,6 @@ class UserDefaultDatabaseConnectionMiddleware {
         if ($method === 'GET') {
             return in_array($path, [
                 'api/micro-star-meters/test',
-                'api/mpm-plugins',
                 'api/protected-pages',
                 'api/usage-types',
                 'up',
@@ -115,7 +147,7 @@ class UserDefaultDatabaseConnectionMiddleware {
         }
 
         if ($method === 'POST') {
-            return in_array($path, ['api/users/password', 'api/companies']);
+            return $path == 'api/companies';
         }
 
         return false;

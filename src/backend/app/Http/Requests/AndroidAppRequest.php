@@ -7,8 +7,6 @@ use Illuminate\Foundation\Http\FormRequest;
 class AndroidAppRequest extends FormRequest {
     /**
      * Determine if the user is authorized to make this request.
-     *
-     * @return bool
      */
     public function authorize(): bool {
         return true;
@@ -21,14 +19,14 @@ class AndroidAppRequest extends FormRequest {
      */
     public function rules(): array {
         return [
-            'name' => 'required|min:3',
-            'surname' => 'required|min:3',
-            'phone' => 'required|min:11|regex:(^\+)|numeric',
-            'tariff_id' => 'required',
-            'geo_points' => 'required',
-            'serial_number' => 'required|string',
-            'manufacturer' => 'required',
-            'meter_type' => 'required',
+            'name' => ['required', 'min:3'],
+            'surname' => ['required', 'min:3'],
+            'phone' => ['required', 'min:11', 'regex:(^\+)', 'numeric'],
+            'tariff_id' => ['required'],
+            'geo_points' => ['required'],
+            'serial_number' => ['required', 'string'],
+            'manufacturer' => ['required'],
+            'meter_type' => ['required'],
         ];
     }
 }

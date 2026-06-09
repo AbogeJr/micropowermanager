@@ -15,7 +15,7 @@
 
       <widget
         :title="deviceInfoTitle"
-        color="green"
+        color="primary"
         id="device-info"
         style="margin-top: 2rem"
       >
@@ -62,7 +62,7 @@
     <div class="md-layout-item md-size-60">
       <widget
         :title="'Details of ' + soldAppliance.applianceType.name"
-        color="green"
+        color="primary"
         :key="updateDetail"
         :subscriber="subscriber"
       >
@@ -70,9 +70,30 @@
           :title="$tc('phrases.editRate')"
           @confirmed="editRate"
         ></confirmation-box>
+        <modify-total-cost-modal
+          v-if="showModifyTotalCost"
+          :show="showModifyTotalCost"
+          :sold-appliance="soldAppliance"
+          :saving="totalCostSaving"
+          @save="handleTotalCostSaved"
+          @close="showModifyTotalCost = false"
+        />
         <md-dialog :md-active.sync="getPayment">
           <md-dialog-title>How Much Do You Want to Pay?</md-dialog-title>
           <div style="padding: 2vh">
+            <md-field v-if="paymentProviders.length > 0">
+              <label>Payment Method</label>
+              <md-select v-model="selectedProviderId" name="paymentMethod">
+                <md-option :value="0">Cash</md-option>
+                <md-option
+                  v-for="provider in paymentProviders"
+                  :key="provider.id"
+                  :value="provider.id"
+                >
+                  {{ provider.name }}
+                </md-option>
+              </md-select>
+            </md-field>
             <md-field
               :class="{
                 'md-invalid': errors.has($tc('words.amount')),
@@ -93,7 +114,11 @@
               </span>
             </md-field>
             <md-content class="md-accent" v-if="errorLabel">
-              Amount is not bigger than total remaining amount !!!
+              {{
+                isEnergyService
+                  ? "Payment Amount can not be less than Minimum Payable Amount"
+                  : "Payment Amount can not bigger than Total Remaining Amount !!!"
+              }}
             </md-content>
           </div>
           <md-progress-bar
@@ -119,6 +144,85 @@
 
         <div class="md-layout md-gutter dialog-place">
           <div
+            v-if="isDeleted"
+            class="md-layout-item md-size-100"
+            style="padding: 1rem 2vw 0"
+          >
+            <div class="deleted-banner">
+              <md-icon>info</md-icon>
+              <span>
+                {{
+                  $tc("phrases.soldAppliancePlanDeleted", 1, {
+                    date: formatReadableDate(soldAppliance.deletedAt),
+                  })
+                }}
+              </span>
+            </div>
+          </div>
+          <div
+            v-else
+            class="md-layout-item md-size-100"
+            style="text-align: right; padding: 1rem 2vw 0"
+          >
+            <md-button
+              class="md-accent md-raised md-dense"
+              @click="confirmDeleteSoldAppliance()"
+            >
+              <md-icon style="color: white">delete</md-icon>
+              {{ $tc("phrases.deleteSoldAppliance", 0) }}
+            </md-button>
+          </div>
+          <div
+            v-if="isEnergyService"
+            class="md-layout-item md-layout md-gutter md-size-100"
+            style="padding: 2vw"
+          >
+            <div class="md-layout-item md-size-50">
+              <h2>
+                <b>{{ $tc("phrases.paymentType") }}:</b>
+                Energy as a Service
+              </h2>
+              <h4>
+                <b>{{ $tc("phrases.pricePerDay") }}:</b>
+                {{ moneyFormat(soldAppliance.pricePerDay) }}
+              </h4>
+              <h4>
+                <b>{{ $tc("phrases.downPayment") }}:</b>
+                {{ moneyFormat(soldAppliance.downPayment) }}
+              </h4>
+              <h4>
+                <b>{{ $tc("phrases.minimumPayableAmount", 0) }}:</b>
+                {{
+                  soldAppliance.minimumPayableAmount
+                    ? moneyFormat(soldAppliance.minimumPayableAmount)
+                    : "N/A"
+                }}
+                <span v-if="minimumPaymentDaysText" class="eaas-days-hint">
+                  ({{ minimumPaymentDaysText }})
+                </span>
+              </h4>
+              <div class="eaas-rate-info">
+                1 day of service =
+                {{ moneyFormat(soldAppliance.pricePerDay) }}
+              </div>
+            </div>
+            <div class="md-layout-item md-size-50">
+              <h3>
+                <b>{{ $tc("phrases.soldDate") }}:</b>
+                {{ formatReadableDate(soldAppliance.createdAt) }}
+              </h3>
+              <h3>
+                <b>Total Payments:</b>
+                {{ moneyFormat(soldAppliance.totalPayments) }}
+              </h3>
+              <h3>
+                <b>{{ $tc("phrases.lastPaidDate") }}:</b>
+                {{ lastPaidDate }}
+              </h3>
+            </div>
+          </div>
+          <div
+            v-else
             class="md-layout-item md-layout md-gutter md-size-100"
             style="padding: 2vw"
           >
@@ -126,9 +230,17 @@
               <h2>
                 <b>{{ $tc("phrases.totalCost") }}:</b>
                 {{ moneyFormat(soldAppliance.totalCost) }}
+                <md-button
+                  class="md-primary md-raised md-dense"
+                  @click="openModifyTotalCost()"
+                  :disabled="!canEditTotalCost || isDeleted"
+                >
+                  <md-icon style="color: white">edit</md-icon>
+                  {{ $tc("words.modify") }}
+                </md-button>
               </h2>
               <h4>
-                <b>Down Payment:</b>
+                <b>{{ $tc("phrases.downPayment") }}:</b>
                 {{ moneyFormat(soldAppliance.downPayment) }}
               </h4>
               <h4>
@@ -152,158 +264,156 @@
             </div>
           </div>
           <div class="md-layout-item md-size-100">
-            <md-table v-if="soldAppliance.rateCount > 0">
-              <md-table-toolbar>
-                <div class="md-toolbar-section-start">
-                  <h1 class="md-title">Payment Plan</h1>
-                </div>
-                <div class="md-toolbar-section-end">
-                  <md-button
-                    class="md-primary md-raised md-dense"
-                    @click="getPayment = true"
-                    :disabled="!soldAppliance.totalRemainingAmount"
-                  >
-                    <md-icon style="color: white">payments</md-icon>
-                    Get Payment
-                  </md-button>
-                </div>
-              </md-table-toolbar>
-              <md-table-row>
-                <md-table-head>ID</md-table-head>
-                <md-table-head>
-                  <strong>{{ $tc("words.cost") }}</strong>
-                </md-table-head>
-                <md-table-head>
-                  <strong>
-                    {{ $tc("phrases.remainingAmount") }}
-                  </strong>
-                </md-table-head>
-                <md-table-head>
-                  <strong>
-                    {{ $tc("phrases.dueDate") }}
-                  </strong>
-                </md-table-head>
-                <md-table-head>
-                  <strong>Edit Rate</strong>
-                </md-table-head>
-              </md-table-row>
-              <md-table-row
-                v-for="(rate, index) in getApplianceRates()"
-                :key="rate.id"
+            <widget
+              :title="isEnergyService ? 'Payment History' : 'Payment Plan'"
+              color="primary"
+              :paginator="applianceRateService.paginator"
+              :subscriber="ratesSubscriber"
+            >
+              <md-table
+                v-if="soldAppliance.rates && soldAppliance.rates.length > 0"
               >
-                <md-table-cell>
-                  {{ index + 1 }}
-                  <md-icon v-if="rate.remaining === 0">
-                    check
-                    <md-tooltip md-direction="top">Paid</md-tooltip>
-                  </md-icon>
-                </md-table-cell>
-                <md-table-cell v-if="editRow === 'rate' + '_' + rate.id">
-                  <md-field
-                    :class="{
-                      'md-invalid': errors.has($tc('words.cost')),
-                    }"
-                  >
-                    <span class="md-prefix">
-                      {{ currency }}
-                    </span>
-                    <md-input
-                      :id="$tc('words.cost')"
-                      :name="$tc('words.cost')"
-                      v-model="tempCost"
-                      v-validate="'required|numeric|min_value:0'"
-                      type="number"
-                    />
-                    <span class="md-error">
-                      {{ errors.first($tc("words.cost")) }}
-                    </span>
-                  </md-field>
-                </md-table-cell>
-                <md-table-cell v-else>
-                  {{ moneyFormat(rate.rate_cost) }}
-                </md-table-cell>
-                <md-table-cell>
-                  {{ moneyFormat(rate.remaining) }}
-                </md-table-cell>
-
-                <md-table-cell>
-                  {{ formatReadableDate(rate.due_date) }}
-                </md-table-cell>
-                <div
-                  v-if="
-                    rate.rate_cost === rate.remaining &&
-                    soldAppliance.applianceType.asset_type_id !== 1
-                  "
+                <md-table-toolbar>
+                  <div class="md-toolbar-section-end" style="margin-left: auto">
+                    <md-button
+                      class="md-primary md-raised md-dense"
+                      @click="openPaymentDialog()"
+                      :disabled="
+                        isDeleted ||
+                        (!isEnergyService &&
+                          !soldAppliance.totalRemainingAmount)
+                      "
+                    >
+                      <md-icon style="color: white">payments</md-icon>
+                      Get Payment
+                    </md-button>
+                  </div>
+                </md-table-toolbar>
+                <md-table-row>
+                  <md-table-head>ID</md-table-head>
+                  <md-table-head>
+                    <strong>{{ $tc("words.amount") }}</strong>
+                  </md-table-head>
+                  <md-table-head v-if="!isEnergyService">
+                    <strong>{{ $tc("phrases.remainingAmount") }}</strong>
+                  </md-table-head>
+                  <md-table-head>
+                    <strong>{{ $tc("words.date") }}</strong>
+                  </md-table-head>
+                  <md-table-head v-if="!isEnergyService">
+                    <strong>Edit Rate</strong>
+                  </md-table-head>
+                </md-table-row>
+                <md-table-row
+                  v-for="(rate, index) in soldAppliance.rates"
+                  :key="rate.id"
                 >
+                  <md-table-cell>
+                    {{ (applianceRateService.paginator.from || 0) + index }}
+                    <md-icon v-if="rate.remaining === 0">
+                      check
+                      <md-tooltip md-direction="top">Paid</md-tooltip>
+                    </md-icon>
+                  </md-table-cell>
                   <md-table-cell v-if="editRow === 'rate' + '_' + rate.id">
-                    <md-button
-                      class="md-icon-button"
-                      @click="showConfirm(rate)"
+                    <md-field
+                      :class="{ 'md-invalid': errors.has($tc('words.cost')) }"
                     >
-                      <md-icon style="color: green">save</md-icon>
-                    </md-button>
-                    <md-button
-                      class="md-icon-button"
-                      @click="closeEditRateAmount(rate.rate_cost)"
-                    >
-                      <md-icon style="color: red">cancel</md-icon>
-                    </md-button>
+                      <span class="md-prefix">{{ currency }}</span>
+                      <md-input
+                        :id="$tc('words.cost')"
+                        :name="$tc('words.cost')"
+                        v-model="tempCost"
+                        v-validate="'required|numeric|min_value:0'"
+                        type="number"
+                      />
+                      <span class="md-error">
+                        {{ errors.first($tc("words.cost")) }}
+                      </span>
+                    </md-field>
                   </md-table-cell>
                   <md-table-cell v-else>
-                    <md-button
-                      class="md-icon-button"
-                      @click="changeRateAmount(rate.id, rate.rate_cost)"
-                    >
-                      <md-icon>edit</md-icon>
-                    </md-button>
+                    {{ moneyFormat(rate.rateCost || rate.rate_cost) }}
                   </md-table-cell>
-                </div>
-                <div v-else>
+                  <md-table-cell v-if="!isEnergyService">
+                    {{ moneyFormat(rate.remaining) }}
+                  </md-table-cell>
                   <md-table-cell>
-                    <md-button class="md-icon-button" disabled="">
+                    {{ formatReadableDate(rate.dueDate || rate.due_date) }}
+                  </md-table-cell>
+                  <md-table-cell v-if="!isEnergyService">
+                    <template
+                      v-if="
+                        (rate.rateCost || rate.rate_cost) === rate.remaining
+                      "
+                    >
+                      <template v-if="editRow === 'rate' + '_' + rate.id">
+                        <md-button
+                          class="md-icon-button"
+                          @click="showConfirm(rate)"
+                        >
+                          <md-icon class="md-primary">save</md-icon>
+                        </md-button>
+                        <md-button
+                          class="md-icon-button"
+                          @click="
+                            closeEditRateAmount(rate.rateCost || rate.rate_cost)
+                          "
+                        >
+                          <md-icon class="md-accent">cancel</md-icon>
+                        </md-button>
+                      </template>
+                      <md-button
+                        v-else
+                        class="md-icon-button"
+                        :disabled="isDeleted"
+                        @click="
+                          changeRateAmount(
+                            rate.id,
+                            rate.rateCost || rate.rate_cost,
+                          )
+                        "
+                      >
+                        <md-icon>edit</md-icon>
+                      </md-button>
+                    </template>
+                    <md-button v-else class="md-icon-button" disabled>
                       <md-icon>edit_off</md-icon>
                     </md-button>
                   </md-table-cell>
-                </div>
-              </md-table-row>
-            </md-table>
-            <div v-else>
-              <span class="md-subheader md-layout-item">
-                <h1>
-                  <md-icon>price_check</md-icon>
-                  Fully paid.
-                </h1>
-              </span>
-            </div>
-            <md-progress-bar
-              v-if="progress"
-              md-mode="indeterminate"
-            ></md-progress-bar>
+                </md-table-row>
+              </md-table>
+            </widget>
           </div>
-          <div
-            class="md-layout-item md-size-100"
-            v-if="soldAppliance.logs.length > 0"
-          >
-            <md-table>
-              <md-table-toolbar>
-                <h1 class="md-title">History</h1>
-              </md-table-toolbar>
-              <md-table-row>
-                <md-table-cell>#</md-table-cell>
-                <md-table-cell>Log</md-table-cell>
-                <md-table-cell>Date</md-table-cell>
-              </md-table-row>
-              <md-table-row
-                v-for="(log, index) in soldAppliance.logs"
-                :key="log.id"
+          <div class="md-layout-item md-size-100">
+            <widget
+              title="History"
+              color="primary"
+              :paginator="applianceLogService.paginator"
+              :subscriber="logsSubscriber"
+            >
+              <md-table
+                v-if="soldAppliance.logs && soldAppliance.logs.length > 0"
               >
-                <md-table-cell>{{ index + 1 }}</md-table-cell>
-                <md-table-cell>{{ log.action }}</md-table-cell>
-                <md-table-cell>
-                  {{ formatReadableDate(log.created_at) }}
-                </md-table-cell>
-              </md-table-row>
-            </md-table>
+                <md-table-row>
+                  <md-table-cell>#</md-table-cell>
+                  <md-table-cell>Log</md-table-cell>
+                  <md-table-cell>Date</md-table-cell>
+                </md-table-row>
+                <md-table-row
+                  v-for="(log, index) in soldAppliance.logs"
+                  :key="log.id"
+                >
+                  <md-table-cell>
+                    {{ (applianceLogService.paginator.from || 0) + index }}
+                  </md-table-cell>
+                  <md-table-cell>{{ log.action }}</md-table-cell>
+                  <md-table-cell>
+                    {{ formatReadableDate(log.createdAt || log.created_at) }}
+                  </md-table-cell>
+                </md-table-row>
+              </md-table>
+            </widget>
           </div>
         </div>
       </widget>
@@ -312,17 +422,23 @@
 </template>
 
 <script>
-import ConfirmationBox from "@/shared/ConfirmationBox"
-import ClientDetailCard from "@/shared/ClientDetailCard"
-import SoldAppliancesList from "./SoldAppliancesList"
-import { AssetPersonService } from "@/services/AssetPersonService"
-import { PersonService } from "@/services/PersonService"
-import Widget from "@/shared/Widget.vue"
-import { currency, notify } from "@/mixins"
-import { AssetRateService } from "@/services/AssetRateService"
 import moment from "moment"
-import { EventBus } from "@/shared/eventbus"
-import { AppliancePaymentService } from "@/services/AppliancePaymentService"
+
+import ModifyTotalCostModal from "./ModifyTotalCostModal.vue"
+import SoldAppliancesList from "./SoldAppliancesList.vue"
+
+import { ErrorHandler } from "@/Helpers/ErrorHandler.js"
+import { currency } from "@/mixins/currency.js"
+import { notify } from "@/mixins/notify.js"
+import { ApplianceLogService } from "@/services/ApplianceLogService.js"
+import { AppliancePaymentService } from "@/services/AppliancePaymentService.js"
+import { AppliancePersonService } from "@/services/AppliancePersonService.js"
+import { ApplianceRateService } from "@/services/ApplianceRateService.js"
+import { PersonService } from "@/services/PersonService.js"
+import ClientDetailCard from "@/shared/ClientDetailCard.vue"
+import ConfirmationBox from "@/shared/ConfirmationBox.vue"
+import { EventBus } from "@/shared/eventbus.js"
+import Widget from "@/shared/Widget.vue"
 
 export default {
   name: "SoldApplianceDetail",
@@ -331,40 +447,89 @@ export default {
     SoldAppliancesList,
     ClientDetailCard,
     ConfirmationBox,
+    ModifyTotalCostModal,
   },
   mixins: [currency, notify],
   data() {
     return {
       appliancePayment: new AppliancePaymentService(),
-      assetRateService: new AssetRateService(),
-      assetPersonService: new AssetPersonService(),
+      applianceRateService: null,
+      applianceLogService: null,
+      appliancePersonService: new AppliancePersonService(),
       personService: new PersonService(),
       soldAppliance: {
         applianceType: {
           name: "",
         },
         logs: [],
+        rates: [],
         device: null,
       },
       adminId:
         this.$store.getters["auth/authenticationService"].authenticateUser.id,
       personId: null,
       getPayment: false,
-      editRow: null,
       errorLabel: false,
       progress: false,
       updateList: 0,
-      tempCost: null,
       soldAppliancesList: [],
       payment: null,
       paymentProgress: false,
       updateDetail: 0,
       subscriber: "sold-appliance-detail",
+      ratesSubscriber: "sold-appliance-rates",
+      logsSubscriber: "sold-appliance-logs",
       currency: this.$store.getters["settings/getMainSettings"].currency,
       detailedDeviceInfo: null,
+      editRow: null,
+      tempCost: null,
+      showModifyTotalCost: false,
+      totalCostSaving: false,
+      paymentProviders: [],
+      selectedProviderId: 0,
+      redirectUrl: null,
     }
   },
   computed: {
+    isEnergyService() {
+      return this.soldAppliance.paymentType === "energy_service"
+    },
+    lastPaidDate() {
+      if (!this.soldAppliance.rates || !this.soldAppliance.rates.length) {
+        return "N/A"
+      }
+      const paidRates = this.soldAppliance.rates.filter(
+        (r) => r.remaining === 0,
+      )
+      if (!paidRates.length) return "N/A"
+      const latest = paidRates.reduce((a, b) => {
+        const dateA = new Date(a.due_date || a.dueDate)
+        const dateB = new Date(b.due_date || b.dueDate)
+        return dateA > dateB ? a : b
+      })
+      return this.formatReadableDate(latest.due_date || latest.dueDate)
+    },
+    minimumPaymentDaysText() {
+      const amount = parseFloat(this.soldAppliance.minimumPayableAmount)
+      const rate = parseFloat(this.soldAppliance.pricePerDay)
+      if (!amount || !rate || rate <= 0) return ""
+      const days = Math.round((amount / rate) * 10) / 10
+      return `${days} day${days !== 1 ? "s" : ""}`
+    },
+    canEditTotalCost() {
+      if (this.isEnergyService) return false
+      if (!this.soldAppliance.rates || !this.soldAppliance.rates.length) {
+        return false
+      }
+      return this.soldAppliance.rates.some(
+        (rate) =>
+          (rate.rateCost || rate.rate_cost) === rate.remaining &&
+          rate.remaining > 0,
+      )
+    },
+    isDeleted() {
+      return Boolean(this.soldAppliance.deletedAt)
+    },
     deviceInfoTitle() {
       if (this.soldAppliance.device?.device_type) {
         const deviceType = this.soldAppliance.device.device_type
@@ -379,19 +544,58 @@ export default {
   watch: {
     $route() {
       this.selectedApplianceId = this.$route.params.id
+      this.applianceRateService = new ApplianceRateService(
+        this.selectedApplianceId,
+      )
+      this.applianceLogService = new ApplianceLogService(
+        this.selectedApplianceId,
+      )
       this.getSoldApplianceDetail()
     },
   },
   created() {
     this.selectedApplianceId = this.$route.params.id
+    this.applianceRateService = new ApplianceRateService(
+      this.selectedApplianceId,
+    )
+    this.applianceLogService = new ApplianceLogService(this.selectedApplianceId)
     this.getSoldApplianceDetail()
   },
+  mounted() {
+    EventBus.$on("pageLoaded", this.reloadRatesOrLogs)
+  },
+  beforeDestroy() {
+    EventBus.$off("pageLoaded", this.reloadRatesOrLogs)
+  },
   methods: {
-    getApplianceRates() {
-      if (this.soldAppliance.downPayment > 0) {
-        return this.soldAppliance.rates.slice(1)
-      } else {
-        return this.soldAppliance.rates
+    reloadRates(data) {
+      this.soldAppliance.rates = this.applianceRateService.updateRatesList(data)
+
+      EventBus.$emit(
+        "widgetContentLoaded",
+        this.ratesSubscriber,
+        this.soldAppliance.rates.length,
+      )
+    },
+
+    reloadLogs(data) {
+      this.soldAppliance.logs = this.applianceLogService.updateLogsList(data)
+
+      EventBus.$emit(
+        "widgetContentLoaded",
+        this.logsSubscriber,
+        this.soldAppliance.logs.length,
+      )
+    },
+
+    reloadRatesOrLogs(subscriber, data) {
+      if (subscriber === this.ratesSubscriber) {
+        this.reloadRates(data)
+        return
+      }
+
+      if (subscriber === this.logsSubscriber) {
+        this.reloadLogs(data)
       }
     },
     showConfirm(data) {
@@ -409,17 +613,94 @@ export default {
       this.tempCost = cost
       this.editRow = "rate_" + id
     },
+    async openPaymentDialog() {
+      this.getPayment = true
+      const providers = await this.appliancePayment.getPaymentProviders()
+      if (!(providers instanceof ErrorHandler)) {
+        this.paymentProviders = providers
+      }
+    },
     closeGetPayment() {
       this.getPayment = false
       this.payment = null
       this.errorLabel = false
+      this.selectedProviderId = 0
+      this.redirectUrl = null
+    },
+    openModifyTotalCost() {
+      this.showModifyTotalCost = true
+    },
+    async handleTotalCostSaved({ newTotalCost, rateCount, rateType }) {
+      const result = await this.$swal({
+        type: "question",
+        title: this.$tc("phrases.editTotalCost"),
+        text: this.$tc("phrases.editTotalCostConfirm"),
+        showCancelButton: true,
+        confirmButtonText: "I'm sure",
+        cancelButtonText: this.$tc("words.cancel"),
+      })
+      if (!result.value) return
+      this.totalCostSaving = true
+      try {
+        const response = await this.appliancePersonService.updateTotalCost(
+          this.selectedApplianceId,
+          newTotalCost,
+          this.adminId,
+          rateCount,
+          rateType,
+        )
+        if (response instanceof ErrorHandler) {
+          throw response
+        }
+        this.showModifyTotalCost = false
+        this.alertNotify("success", this.$tc("phrases.totalCost"))
+        await this.getSoldApplianceDetail()
+        EventBus.$emit("reloadWidget", this.ratesSubscriber)
+        EventBus.$emit("reloadWidget", this.logsSubscriber)
+      } catch (e) {
+        const errorMessage =
+          e instanceof ErrorHandler ? e.message : e.message || "Update failed"
+        this.alertNotify("error", errorMessage)
+      } finally {
+        this.totalCostSaving = false
+      }
+    },
+    async confirmDeleteSoldAppliance() {
+      const result = await this.$swal({
+        type: "warning",
+        title: this.$tc("phrases.deleteSoldAppliance", 0),
+        text: this.$tc("phrases.deleteSoldAppliance", 2, {
+          name: this.soldAppliance.applianceType?.name ?? "",
+        }),
+        showCancelButton: true,
+        confirmButtonText: this.$tc("phrases.deleteSoldAppliance", 0),
+        cancelButtonText: this.$tc("words.cancel"),
+      })
+      if (!result.value) return
+      try {
+        const response = await this.appliancePersonService.delete(
+          this.selectedApplianceId,
+          this.adminId,
+        )
+        if (response instanceof ErrorHandler) {
+          throw response
+        }
+        this.alertNotify("success", this.$tc("phrases.deleteSoldAppliance", 1))
+        await this.getSoldApplianceDetail()
+        EventBus.$emit("reloadWidget", this.ratesSubscriber)
+        EventBus.$emit("reloadWidget", this.logsSubscriber)
+      } catch (e) {
+        const errorMessage =
+          e instanceof ErrorHandler ? e.message : e.message || "Delete failed"
+        this.alertNotify("error", errorMessage)
+      }
     },
     async editRate(data) {
       this.progress = true
       let validator = await this.$validator.validateAll()
       if (validator) {
         try {
-          await this.assetRateService.editAssetRate(
+          await this.applianceRateService.editApplianceRate(
             data,
             this.adminId,
             this.personId,
@@ -430,13 +711,14 @@ export default {
           await this.getSoldApplianceDetail()
         } catch (e) {
           this.alertNotify("error", e.message)
+          this.progress = false
         }
       }
     },
     async getSoldApplianceDetail() {
       this.progress = true
       try {
-        this.soldAppliance = await this.assetPersonService.show(
+        this.soldAppliance = await this.appliancePersonService.show(
           this.selectedApplianceId,
         )
         this.personId = this.soldAppliance.personId
@@ -456,6 +738,12 @@ export default {
           this.subscriber,
           Object.keys(this.soldAppliance),
         )
+
+        EventBus.$emit(
+          "widgetContentLoaded",
+          this.logsSubscriber,
+          this.soldAppliance.logs.length,
+        )
         return this.personId
       } catch (e) {
         this.alertNotify("error", e.message)
@@ -470,14 +758,14 @@ export default {
 
         if (device_type === "solar_home_system") {
           const solarHomeSystemService = new (
-            await import("@/services/SolarHomeSystemService")
+            await import("@/services/SolarHomeSystemService.js")
           ).SolarHomeSystemService()
 
           this.detailedDeviceInfo =
             await solarHomeSystemService.getSolarHomeSystem(device_id)
         } else if (device_type === "meter") {
           const meterService = new (
-            await import("@/services/MeterService")
+            await import("@/services/MeterService.js")
           ).MeterService()
           this.detailedDeviceInfo =
             await meterService.getMeterBySerialNumber(device_serial)
@@ -488,9 +776,8 @@ export default {
     },
     async getPersonSoldAppliances() {
       try {
-        this.soldAppliancesList = await this.assetPersonService.getPersonAssets(
-          this.personId,
-        )
+        this.soldAppliancesList =
+          await this.appliancePersonService.getPersonAppliances(this.personId)
         this.updateList++
       } catch (e) {
         this.alertNotify("error", e.message)
@@ -499,38 +786,57 @@ export default {
     async getAppliancePayment() {
       const validator = await this.$validator.validateAll()
       if (validator) {
-        if (this.checkPaymentForTotalRemaining()) {
-          return
-        }
         this.paymentProgress = true
         try {
-          const rates = this.getApplianceRates()
-
-          if (rates.length) {
-            const installmentCost = rates[1].rate_cost
-            if (this.payment < installmentCost) {
-              this.alertNotify(
-                "info",
-                this.$tc("messages.paymentAmountCannotBeLess", {
-                  amount: installmentCost,
-                }),
-              )
-              this.paymentProgress = false
-              return
-            }
-          }
-
           const payment = {
             personId: this.personId,
             adminId: this.adminId,
             rates: this.soldAppliance.rates,
             amount: this.payment,
+            paymentProvider: this.selectedProviderId,
           }
 
-          await this.appliancePayment.getPaymentForAppliance(
+          const result = await this.appliancePayment.getPaymentForAppliance(
             this.selectedApplianceId,
             payment,
           )
+
+          if (result instanceof ErrorHandler) {
+            throw result
+          }
+
+          if (result.redirect_url) {
+            this.redirectUrl = result.redirect_url
+            window.open(result.redirect_url, "_blank")
+          }
+
+          // Check if transaction_id is returned (async processing)
+          if (result.transaction_id) {
+            // Poll for payment processing status
+            try {
+              await this.appliancePayment.pollPaymentStatus(
+                result.transaction_id,
+                {
+                  maxAttempts: 20,
+                  interval: 1000,
+                },
+              )
+            } catch (pollError) {
+              // If polling fails but payment was initiated, show a warning
+              this.alertNotify(
+                "warning",
+                "Payment initiated but processing status could not be verified. Please refresh to check status.",
+              )
+              this.payment = null
+              this.getPayment = false
+              this.paymentProgress = false
+              await this.getSoldApplianceDetail()
+              EventBus.$emit("reloadWidget", this.ratesSubscriber)
+              EventBus.$emit("reloadWidget", this.logsSubscriber)
+              return
+            }
+          }
+
           this.alertNotify(
             "success",
             this.payment + " " + this.currency + " of payment is made.",
@@ -539,13 +845,28 @@ export default {
           this.getPayment = false
           this.paymentProgress = false
           await this.getSoldApplianceDetail()
+          EventBus.$emit("reloadWidget", this.ratesSubscriber)
+          EventBus.$emit("reloadWidget", this.logsSubscriber)
         } catch (e) {
           this.paymentProgress = false
-          this.alertNotify("error", e.message)
+          const errorMessage =
+            e instanceof ErrorHandler
+              ? e.message
+              : e.message || "Payment failed"
+          this.alertNotify("error", errorMessage)
         }
       }
     },
     checkPaymentForTotalRemaining() {
+      if (this.isEnergyService) {
+        const min = this.soldAppliance.minimumPayableAmount || 0
+        if (min > 0 && this.payment < min) {
+          this.errorLabel = true
+          return true
+        }
+        this.errorLabel = false
+        return false
+      }
       if (this.payment > this.soldAppliance.totalRemainingAmount) {
         this.errorLabel = true
         return true
@@ -558,8 +879,55 @@ export default {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .due-date-row {
   background-color: #a1887f;
+}
+
+.total-cost-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  b {
+    white-space: nowrap;
+  }
+
+  .md-field {
+    flex: 0 0 8rem;
+    margin: 0;
+  }
+}
+
+.eaas-rate-info {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background-color: #f5f5f5;
+  border-left: 3px solid #1b75ba;
+  font-size: 0.95rem;
+  color: #333;
+  border-radius: 2px;
+}
+
+.eaas-days-hint {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.deleted-banner {
+  padding: 0.75rem 1rem;
+  background-color: #fff8e1;
+  border-left: 3px solid #f57c00;
+  color: #6d4c00;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 2px;
+
+  .md-icon {
+    color: #f57c00;
+    flex-shrink: 0;
+    margin: 0;
+  }
 }
 </style>

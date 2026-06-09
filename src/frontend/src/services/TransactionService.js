@@ -1,8 +1,8 @@
-import { Paginator } from "@/Helpers/Paginator"
-import { ErrorHandler } from "@/Helpers/ErrorHandler"
-import { resources } from "@/resources"
-import { EventBus } from "@/shared/eventbus"
-import TransactionRepository from "@/repositories/TransactionRepository"
+import { ErrorHandler } from "@/Helpers/ErrorHandler.js"
+import { Paginator } from "@/Helpers/Paginator.js"
+import TransactionRepository from "@/repositories/TransactionRepository.js"
+import { resources } from "@/resources.js"
+import { EventBus } from "@/shared/eventbus.js"
 
 export class Transactions {
   constructor(meterId) {
@@ -133,16 +133,13 @@ export class TransactionService {
       sentDate: transactionData.created_at,
       lastUpdate: transactionData.updated_at,
       status: this.getOriginalData(transactionData).status,
+      original_transaction: this.getOriginalData(transactionData),
     }
   }
 
   getOriginalData(transactionData) {
     if (transactionData.original_transaction !== undefined) {
       return transactionData.original_transaction
-    } else if (
-      transactionData.original_transaction_type === "airtel_transaction"
-    ) {
-      return transactionData.original_airtel
     } else if (
       transactionData.original_transaction_type === "vodacom_transaction"
     ) {

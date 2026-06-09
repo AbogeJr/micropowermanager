@@ -12,15 +12,15 @@ use App\Http\Controllers\AgentWebController;
 use Illuminate\Support\Facades\Route;
 
 Route::group([
-    'middleware' => ['api', 'jwt.verify'],
+    'middleware' => ['auth:api'],
     'prefix' => 'agents',
 ], static function ($router) {
     Route::get('/', [AgentWebController::class, 'index']);
     Route::get('/{agentId}', [AgentWebController::class, 'show'])->where('agentId', '[0-9]+');
     Route::post('/', [AgentWebController::class, 'store']);
     Route::put('/{agentId}', [AgentWebController::class, 'update']);
+    Route::put('/{agentId}/password', [AgentWebController::class, 'changePassword'])->where('agentId', '[0-9]+');
     Route::get('/search', [AgentWebController::class, 'search']);
-    Route::post('/reset-password', [AgentWebController::class, 'resetPassword']);
     Route::delete('/{agentId}', [AgentWebController::class, 'destroy']);
 
     Route::group(['prefix' => 'assigned'], function () {
@@ -30,7 +30,7 @@ Route::group([
     Route::group(['prefix' => 'sold'], function () {
         Route::get('/{agentId}', [AgentSoldApplianceWebController::class, 'index']);
     });
-    Route::group(['prefix' => 'commissions'], function () {
+    Route::group(['prefix' => 'commissions', 'middleware' => 'permission:settings'], function () {
         Route::get('/', [AgentCommissionWebController::class, 'index']);
         Route::post('/', [AgentCommissionWebController::class, 'store']);
         Route::delete('/{agentCommissionId}', [AgentCommissionWebController::class, 'destroy']);

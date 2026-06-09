@@ -2,32 +2,43 @@
 
 use App\Http\Controllers\AgentAssignedAppliancesController;
 use App\Http\Controllers\AgentAuthController;
+use App\Http\Controllers\AgentAvailableDeviceController;
 use App\Http\Controllers\AgentBalanceController;
 use App\Http\Controllers\AgentCustomerController;
+use App\Http\Controllers\AgentCustomerDocumentController;
 use App\Http\Controllers\AgentCustomersPaymentHistoryController;
 use App\Http\Controllers\AgentCustomerTicketController;
 use App\Http\Controllers\AgentDashboardBalanceHistoryController;
 use App\Http\Controllers\AgentDashboardBoxesController;
 use App\Http\Controllers\AgentDashboardRevenueController;
 use App\Http\Controllers\AgentFirebaseController;
+use App\Http\Controllers\AgentMeterController;
 use App\Http\Controllers\AgentSoldApplianceController;
 use App\Http\Controllers\AgentTicketController;
 use App\Http\Controllers\AgentTransactionsController;
+use App\Http\Controllers\AgentWebController;
+use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
 
 // Android App Services
-Route::group([
-    'prefix' => 'app',
-], function () {
+Route::group(['prefix' => 'app'], function () {
     Route::post('login', [AgentAuthController::class, 'login']);
-    Route::post('logout', [AgentAuthController::class, 'logout']);
-    Route::post('refresh', [AgentAuthController::class, 'refresh']);
-    Route::get('me', [AgentAuthController::class, 'me']);
-    Route::group(['prefix' => 'agents', 'middleware' => ['jwt.verify:agent', 'agent_api']], function () {
+    Route::post('reset-password', [AgentWebController::class, 'resetPassword']);
+
+    Route::group(['middleware' => 'auth:agent_api'], static function () {
+        Route::post('logout', [AgentAuthController::class, 'logout']);
+        Route::post('refresh', [AgentAuthController::class, 'refresh']);
+        Route::get('me', [AgentAuthController::class, 'me']);
+    });
+
+    Route::group(['prefix' => 'agents', 'middleware' => ['auth:agent_api']], function () {
         Route::post('/firebase', [AgentFirebaseController::class, 'update']);
         Route::get('/balance', [AgentBalanceController::class, 'show']);
         Route::group(['prefix' => 'customers'], function () {
             Route::get('/', [AgentCustomerController::class, 'index']);
+            Route::post('/', [AgentCustomerController::class, 'store']);
+            Route::post('/{customerId}/meters', [AgentCustomerController::class, 'storeMeter'])
+                ->where('customerId', '[0-9]+');
             Route::get('/search', [AgentCustomerController::class, 'search']);
             Route::get(
                 '/{customerId}/graph/{period}/{limit?}/{order?}',
@@ -37,10 +48,25 @@ Route::group([
                 '/graph/{period}/{limit?}/{order?}',
                 [AgentCustomersPaymentHistoryController::class, 'index']
             );
+            Route::get('/{customerId}', [AgentCustomerController::class, 'show'])
+                ->where('customerId', '[0-9]+');
+
+            Route::get('/{customerId}/documents', [AgentCustomerDocumentController::class, 'index'])
+                ->where('customerId', '[0-9]+');
+            Route::post('/{customerId}/documents', [AgentCustomerDocumentController::class, 'store'])
+                ->where('customerId', '[0-9]+');
+            Route::get('/documents/{personDocument}/download', [AgentCustomerDocumentController::class, 'show']);
+            Route::delete('/documents/{personDocument}', [AgentCustomerDocumentController::class, 'destroy']);
         });
         Route::group(['prefix' => 'transactions'], function () {
             Route::get('/', [AgentTransactionsController::class, 'index']);
-            Route::get('/{customerId}', [AgentTransactionsController::class, 'show']);
+            Route::get('/{transactionId}/token', [AgentTransactionsController::class, 'token'])
+                ->where('transactionId', '[0-9]+');
+            Route::get('/{customerId}', [AgentTransactionsController::class, 'show'])
+                ->where('customerId', '[0-9]+');
+            Route::post('/', [TransactionController::class, 'store'])
+                ->name('agent-app-transaction')
+                ->middleware(['transaction.auth', 'transaction.request', 'agent.balance']);
         });
         Route::group(['prefix' => 'appliances'], function () {
             Route::get('/', [AgentSoldApplianceController::class, 'index']);
@@ -51,6 +77,12 @@ Route::group([
         });
         Route::group(['prefix' => 'appliance_types'], function () {
             Route::get('/', [AgentAssignedAppliancesController::class, 'index']);
+        });
+        Route::group(['prefix' => 'devices'], function () {
+            Route::get('/unassigned', [AgentAvailableDeviceController::class, 'index']);
+        });
+        Route::group(['prefix' => 'meters'], function () {
+            Route::get('/', [AgentMeterController::class, 'index']);
         });
         Route::group(['prefix' => 'ticket'], function () {
             Route::get('/', [AgentTicketController::class, 'index']);

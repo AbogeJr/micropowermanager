@@ -5,14 +5,12 @@ namespace App\Services;
 use App\Events\PaymentSuccessEvent;
 use App\Models\Agent;
 use App\Models\AgentSoldAppliance;
-use App\Models\AssetPerson;
+use App\Models\AppliancePerson;
+use App\Models\Transaction\Transaction;
 use App\Services\Interfaces\IBaseService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
-use MPM\Device\DeviceAddressService;
-use MPM\Device\DeviceService;
-use MPM\Transaction\TransactionService;
 
 /**
  * @implements IBaseService<AgentSoldAppliance>
@@ -33,8 +31,7 @@ class AgentSoldApplianceService implements IBaseService {
         private AgentTransactionTransactionService $agentTransactionTransactionService,
         private AppliancePersonService $appliancePersonService,
         private ApplianceRateService $applianceRateService,
-        private AssetPerson $assetPerson,
-        private DeviceAddressService $deviceAddressService,
+        private AppliancePerson $appliancePerson,
         private DeviceService $deviceService,
         private GeographicalInformationService $geographicalInformationService,
         private PersonService $personService,
@@ -49,10 +46,10 @@ class AgentSoldApplianceService implements IBaseService {
     }
 
     /**
-     * @return Collection<int, AssetPerson>|LengthAwarePaginator<int, AssetPerson>
+     * @return Collection<int, AppliancePerson>|LengthAwarePaginator<int, AppliancePerson>
      */
     public function getByCustomerId(int $agentId, ?int $customerId = null): Collection|LengthAwarePaginator {
-        return $this->assetPerson->newQuery()->with(['person', 'device', 'rates'])
+        return $this->appliancePerson->newQuery()->with(['person', 'device', 'rates'])
             ->whereHasMorph(
                 'creator',
                 [Agent::class],
@@ -81,7 +78,7 @@ class AgentSoldApplianceService implements IBaseService {
     }
 
     /**
-     * @return Collection<int, AgentSoldAppliance>|LengthAwarePaginator<int, AgentSoldAppliance>|LengthAwarePaginator<int, AssetPerson>
+     * @return Collection<int, AgentSoldAppliance>|LengthAwarePaginator<int, AgentSoldAppliance>|LengthAwarePaginator<int, AppliancePerson>
      */
     public function getAll(
         ?int $limit = null,
@@ -95,7 +92,7 @@ class AgentSoldApplianceService implements IBaseService {
 
         $query = $this->agentSoldAppliance->newQuery()->with([
             'assignedAppliance',
-            'assignedAppliance.appliance.assetType',
+            'assignedAppliance.appliance.applianceType',
             'person',
         ]);
 
@@ -117,16 +114,16 @@ class AgentSoldApplianceService implements IBaseService {
         }
         if ($limit) {
             return $query->latest()->paginate($limit);
-        } else {
-            return $query->latest()->paginate();
         }
+
+        return $query->latest()->paginate();
     }
 
     /**
-     * @return LengthAwarePaginator<int, AssetPerson>
+     * @return LengthAwarePaginator<int, AppliancePerson>
      */
     public function list(int $agentId): LengthAwarePaginator {
-        return $this->assetPerson->newQuery()->with(['person', 'device', 'rates', 'asset.assetType'])
+        return $this->appliancePerson->newQuery()->with(['person', 'device', 'rates', 'appliance.applianceType'])
             ->whereHasMorph(
                 'creator',
                 [Agent::class],
@@ -152,9 +149,14 @@ class AgentSoldApplianceService implements IBaseService {
     public function processSaleFromRequest(AgentSoldAppliance $agentSoldAppliance, array $requestData = []): void {
         $assignedApplianceId = $agentSoldAppliance->agent_assigned_appliance_id;
         $assignedAppliance = $this->agentAssignedApplianceService->getById($assignedApplianceId);
-        $appliance = $assignedAppliance->appliance()->first();
+        $assignedAppliance->appliance()->first();
         $agent = $this->agentService->getById($assignedAppliance->agent_id);
         $deviceSerial = $requestData['device_serial'] ?? null;
+        $paymentType = $requestData['payment_type'] ?? AppliancePerson::PAYMENT_TYPE_INSTALLMENT;
+        $rateType = $requestData['rate_type'] ?? 'monthly';
+        $isEnergyService = $paymentType === AppliancePerson::PAYMENT_TYPE_ENERGY_SERVICE;
+
+        $downPayment = $requestData['down_payment'] ?: 0;
 
         // create agent transaction
         $agentTransactionData = [
@@ -166,10 +168,10 @@ class AgentSoldApplianceService implements IBaseService {
 
         // assign agent transaction to transaction
         $transactionData = [
-            'amount' => $requestData['down_payment'] ?: 0,
+            'amount' => $downPayment,
             'sender' => 'Agent-'.$agent->id,
             'message' => $deviceSerial ?? '-',
-            'type' => 'deferred_payment',
+            'type' => Transaction::TYPE_DOWN_PAYMENT,
         ];
 
         $transaction = $this->transactionService->make($transactionData);
@@ -181,12 +183,15 @@ class AgentSoldApplianceService implements IBaseService {
         // assign agent to appliance person
         $appliancePersonData = [
             'person_id' => $requestData['person_id'],
-            'first_payment_date' => Carbon::parse($requestData['first_payment_date'])->toDateString(),
-            'rate_count' => $requestData['tenure'],
-            'total_cost' => $assignedAppliance->cost,
-            'down_payment' => $requestData['down_payment'],
-            'asset_id' => $assignedAppliance->appliance->id,
+            'first_payment_date' => $isEnergyService ? null : Carbon::parse($requestData['first_payment_date'])->toDateString(),
+            'rate_count' => $isEnergyService ? 0 : $requestData['tenure'],
+            'total_cost' => $isEnergyService ? 0 : $assignedAppliance->cost,
+            'down_payment' => $downPayment,
+            'appliance_id' => $assignedAppliance->appliance->id,
             'device_serial' => $deviceSerial,
+            'payment_type' => $paymentType,
+            'minimum_payable_amount' => $isEnergyService ? ($requestData['minimum_payable_amount'] ?? null) : null,
+            'price_per_day' => $isEnergyService ? ($requestData['price_per_day'] ?? null) : null,
         ];
 
         $appliancePerson = $this->appliancePersonService->make($appliancePersonData);
@@ -195,42 +200,55 @@ class AgentSoldApplianceService implements IBaseService {
         $this->agentAppliancePersonService->assign();
         $this->appliancePersonService->save($appliancePerson);
 
+        if (!$deviceSerial) {
+            $transaction->message = (string) $appliancePerson->id;
+            $this->transactionService->save($transaction);
+        }
+
         if ($deviceSerial) {
             $addressFromCustomer = $appliancePerson->person()->first()->addresses()->first();
-            $addressData = $requestData['address'] ?? ['street' => $addressFromCustomer->street, 'city_id' => $addressFromCustomer->city_id];
-            $points = $requestData['points'] ?? $addressFromCustomer->geo()->first()->points;
+            $addressData = $requestData['address'] ?? [
+                'street' => $addressFromCustomer->street,
+                'city_id' => $addressFromCustomer->city_id,
+            ];
+            $points = $requestData['points'] ?? $addressFromCustomer->geo()->first()?->points;
+
             $device = $this->deviceService->getBySerialNumber($deviceSerial);
             $this->deviceService->update($device, ['person_id' => $requestData['person_id']]);
+
             $address = $this->addressesService->make([
                 'street' => $addressData['street'],
                 'city_id' => $addressData['city_id'],
             ]);
 
-            $this->deviceAddressService->setAssigned($address);
-            $this->deviceAddressService->setAssignee($device);
-            $this->deviceAddressService->assign();
-            $this->addressesService->save($address);
+            // Attach the new address to the buyer (person) rather than the device.
+            $this->addressesService->assignAddressToOwner($appliancePerson->person, $address);
 
-            $geoInfo = $this->geographicalInformationService->make([
-                'points' => $points,
-            ]);
+            if ($points) {
+                $geoInfo = $this->geographicalInformationService->make([
+                    'points' => $points,
+                ]);
 
-            $this->addressGeographicalInformationService->setAssigned($geoInfo);
-            $this->addressGeographicalInformationService->setAssignee($address);
-            $this->addressGeographicalInformationService->assign();
-            $this->geographicalInformationService->save($geoInfo);
+                $this->addressGeographicalInformationService->setAssigned($geoInfo);
+                $this->addressGeographicalInformationService->setAssignee($address);
+                $this->addressGeographicalInformationService->assign();
+                $this->geographicalInformationService->save($geoInfo);
+            }
         }
 
         // initalize appliance Rates
         $buyer = $this->personService->getById($appliancePerson->person_id);
-        $this->applianceRateService->create($appliancePerson);
+
+        if (!$isEnergyService) {
+            $this->applianceRateService->create($appliancePerson, $rateType);
+        }
 
         if ($appliancePerson->down_payment > 0) {
-            $applianceRate = $this->applianceRateService->getDownPaymentAsAssetRate($appliancePerson);
+            $applianceRate = $this->applianceRateService->createPaidRate($appliancePerson, $appliancePerson->down_payment);
             event(new PaymentSuccessEvent(
-                amount: $transaction->amount,
+                amount: (int) $transaction->amount,
                 paymentService: $transaction->original_transaction_type === 'cash_transaction' ? 'web' : 'agent',
-                paymentType: 'down payment',
+                paymentType: Transaction::TYPE_DOWN_PAYMENT,
                 sender: $transaction->sender,
                 paidFor: $applianceRate,
                 payer: $buyer,

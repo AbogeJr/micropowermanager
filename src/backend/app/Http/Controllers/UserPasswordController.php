@@ -4,58 +4,114 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AdminResetPasswordRequest;
 use App\Http\Requests\UserChangePasswordRequest;
+use App\Http\Requests\UserPasswordResetConfirmRequest;
 use App\Http\Resources\ApiResource;
 use App\Models\User;
+use App\Services\DatabaseProxyManagerService;
+use App\Services\UserPasswordResetService;
 use App\Services\UserService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Http\Response;
-use MPM\DatabaseProxy\DatabaseProxyManagerService;
+use Illuminate\Http\JsonResponse;
 
 class UserPasswordController extends Controller {
     public function __construct(
         private UserService $userService,
         private DatabaseProxyManagerService $databaseProxyManagerService,
-    ) {
-        $this->userService = $userService;
-    }
+        private UserPasswordResetService $userPasswordResetService,
+    ) {}
 
-    public function forgotPassword(AdminResetPasswordRequest $request, Response $response): Response {
+    public function forgotPassword(AdminResetPasswordRequest $request): JsonResponse {
         $email = $request->input('email');
 
         try {
             $databaseProxy = $this->databaseProxyManagerService->findByEmail($email);
             $companyId = $databaseProxy->getCompanyId();
 
-            return $this->databaseProxyManagerService->runForCompany($companyId, function () use ($email, $response) {
-                if (!$this->userService->resetPassword($email)) {
-                    return $response->setStatusCode(422)->setContent(
-                        [
-                            'data' => [
-                                'message' => 'Failed to send password email. Please try it again later.',
-                                'status_code' => 409,
-                            ],
-                        ]
-                    );
+            return $this->databaseProxyManagerService->runForCompany($companyId, function () use ($email): JsonResponse {
+                if (!$this->userPasswordResetService->sendResetEmail($email)) {
+                    return response()->json([
+                        'data' => [
+                            'message' => 'Failed to send reset email. Please try it again later.',
+                            'status_code' => 409,
+                        ],
+                    ], 422);
                 }
 
-                return $response->setStatusCode(200)->setContent(
-                    [
-                        'data' => [
-                            'message' => 'Password reset email will be sent to your email if it exists',
-                            'status_code' => 200,
-                        ],
-                    ]
-                );
-            });
-        } catch (ModelNotFoundException $e) {
-            return $response->setStatusCode(200)->setContent(
-                [
+                return response()->json([
                     'data' => [
-                        'message' => 'Password reset email will be sent to your email if it exists',
+                        'message' => 'If the email exists, a reset link has been sent.',
                         'status_code' => 200,
                     ],
-                ]
-            );
+                ], 200);
+            });
+        } catch (ModelNotFoundException) {
+            return response()->json([
+                'data' => [
+                    'message' => 'If the email exists, a reset link has been sent.',
+                    'status_code' => 200,
+                ],
+            ], 200);
+        }
+    }
+
+    public function validateResetToken(string $token): ApiResource {
+        [$email, $rawToken] = $this->userPasswordResetService->decodeCompositeToken($token);
+        if (!$email || !$rawToken) {
+            return new ApiResource([
+                'valid' => false,
+                'email' => null,
+            ]);
+        }
+
+        try {
+            $databaseProxy = $this->databaseProxyManagerService->findByEmail($email);
+            $companyId = $databaseProxy->getCompanyId();
+
+            return $this->databaseProxyManagerService->runForCompany($companyId, function () use ($rawToken): ApiResource {
+                $resolvedEmail = $this->userPasswordResetService->validateToken($rawToken);
+
+                return new ApiResource([
+                    'valid' => $resolvedEmail !== null,
+                    'email' => $resolvedEmail,
+                ]);
+            });
+        } catch (ModelNotFoundException) {
+            return new ApiResource([
+                'valid' => false,
+                'email' => null,
+            ]);
+        }
+    }
+
+    public function confirmReset(UserPasswordResetConfirmRequest $request): ApiResource {
+        $token = $request->input('token');
+        $password = $request->input('password');
+
+        [$email, $rawToken] = $this->userPasswordResetService->decodeCompositeToken($token);
+        if (!$email || !$rawToken) {
+            return new ApiResource([
+                'message' => 'Invalid or expired token.',
+                'status_code' => 400,
+            ]);
+        }
+
+        try {
+            $databaseProxy = $this->databaseProxyManagerService->findByEmail($email);
+            $companyId = $databaseProxy->getCompanyId();
+
+            return $this->databaseProxyManagerService->runForCompany($companyId, function () use ($rawToken, $password): ApiResource {
+                $success = $this->userPasswordResetService->resetPassword($rawToken, $password);
+
+                return new ApiResource([
+                    'message' => $success ? 'Password has been reset successfully.' : 'Invalid or expired token.',
+                    'status_code' => $success ? 200 : 400,
+                ]);
+            });
+        } catch (ModelNotFoundException) {
+            return new ApiResource([
+                'message' => 'Invalid company email.',
+                'status_code' => 400,
+            ]);
         }
     }
 

@@ -17,12 +17,6 @@ class MeterRevenueController extends Controller {
      * @group     Meters
      *
      * @bodyParam serialNumber string required.
-     *
-     * @responseFile responses/meters/meter.revenue.json
-     *
-     * @param $serialNumber
-     *
-     * @return ApiResource
      */
     public function show(string $serialNumber): ApiResource {
         $revenue = $this->meterRevenueService->getBySerialNumber($serialNumber);

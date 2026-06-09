@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
+use Tests\CreateEnvironments;
 use Tests\TestCase;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class TargetTest extends TestCase {
     use CreateEnvironments;
 
-    public function testUserGetsTargetList() {
+    public function testUserGetsTargetList(): void {
         $this->createTestData();
         $this->createCluster();
         $this->createMiniGrid();
@@ -21,7 +21,7 @@ class TargetTest extends TestCase {
         $this->assertEquals(count($response['data']), $targetCount);
     }
 
-    public function testUserGetsTargetById() {
+    public function testUserGetsTargetById(): void {
         $this->createTestData();
         $this->createCluster();
         $this->createMiniGrid();
@@ -34,7 +34,7 @@ class TargetTest extends TestCase {
         $this->assertEquals($response['data']['id'], $this->targets[0]->id);
     }
 
-    public function testUserCreatesNewTarget() {
+    public function testUserCreatesNewTarget(): void {
         $this->withExceptionHandling();
         $this->createTestData();
         $this->createCluster();
@@ -56,20 +56,12 @@ class TargetTest extends TestCase {
                 ],
             ],
             'period' => '2022-05-12',
-            'targetType' => 'cluster',
-            'targetId' => 1,
+            'targetForType' => 'cluster',
+            'targetForId' => $this->cluster->id,
         ];
         $response = $this->actingAs($this->user)->post('/api/targets', $targetData);
         $response->assertStatus(201);
-        $this->assertEquals($response['data']['type'], $targetData['targetType']);
+        $this->assertEquals($response['data']['type'], $targetData['targetForType']);
         $this->assertEquals($response['data']['target_date'], $targetData['period']);
-    }
-
-    public function actingAs($user, $driver = null) {
-        $token = JWTAuth::fromUser($user);
-        $this->withHeader('Authorization', "Bearer {$token}");
-        parent::actingAs($user);
-
-        return $this;
     }
 }

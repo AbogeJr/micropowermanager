@@ -1,7 +1,8 @@
 <template>
   <div>
     <md-dialog
-      :md-active.sync="modalVisible"
+      :md-active="internalDialogVisible"
+      @update:mdActive="handleDialogActive"
       style="max-width: 60rem; margin: auto"
     >
       <md-dialog-title>Sell Appliance</md-dialog-title>
@@ -148,35 +149,6 @@
                     </span>
                   </md-field>
                 </div>
-                <div class="md-layout-item md-size-50 md-small-size-100">
-                  <md-field
-                    :class="{
-                      'md-invalid': errors.has('count-based-form.address'),
-                    }"
-                  >
-                    <label for="address">
-                      {{ $tc("words.address") }}
-                    </label>
-                    <md-select
-                      id="address"
-                      name="address"
-                      v-model="selectedAddressId"
-                      v-validate="'required'"
-                    >
-                      <md-option
-                        v-for="(adr, index) in person.addresses"
-                        :key="index"
-                        :value="adr.id"
-                      >
-                        {{ adr.city.name }}
-                        {{ adr.street }}
-                      </md-option>
-                    </md-select>
-                    <span class="md-error">
-                      {{ errors.first("count-based-form.address") }}
-                    </span>
-                  </md-field>
-                </div>
               </form>
             </md-tab>
             <md-tab
@@ -314,35 +286,6 @@
                     </span>
                   </md-field>
                 </div>
-                <div class="md-layout-item md-size-50 md-small-size-100">
-                  <md-field
-                    :class="{
-                      'md-invalid': errors.has('cost-based-form.address'),
-                    }"
-                  >
-                    <label for="address">
-                      {{ $tc("words.address") }}
-                    </label>
-                    <md-select
-                      id="address"
-                      name="address"
-                      v-model="selectedAddressId"
-                      v-validate="'required'"
-                    >
-                      <md-option
-                        v-for="(adr, index) in person.addresses"
-                        :key="index"
-                        :value="adr.id"
-                      >
-                        {{ adr.city.name }}
-                        {{ adr.street }}
-                      </md-option>
-                    </md-select>
-                    <span class="md-error">
-                      {{ errors.first("cost-based-form.address") }}
-                    </span>
-                  </md-field>
-                </div>
                 <div class="md-layout-item md-size-100 md-small-size-100">
                   <md-field>
                     <label for="minimumPayableAmount">
@@ -364,49 +307,220 @@
                 </div>
               </form>
             </md-tab>
-          </md-tabs>
-          <div
-            class="md-layout-item md-size-100 md-small-size-100"
-            v-if="isDeviceSelectionRequired"
-          >
-            <md-field
-              :class="{
-                'md-invalid': errors.has($tc('phrases.selectDevice')),
-              }"
+            <md-tab
+              id="energy-service"
+              @click="tabName = 'energy-service'"
+              md-label="Energy as a Service"
             >
-              <label>
-                {{ $tc("phrases.selectDevice") }}
-              </label>
-              <md-select
-                :name="$tc('phrases.selectDevice')"
-                v-model="selectedDeviceSerial"
-                v-validate="'required'"
+              <form
+                data-vv-scope="energy-service-form"
+                class="md-layout md-gutter"
               >
-                <template v-if="!deviceSelectionList.length">
-                  <md-option disabled>
-                    <md-tooltip md-direction="top">
-                      Consider changing the search term or create a suitable
-                      device first.
-                    </md-tooltip>
-                    No available device found.
-                  </md-option>
-                </template>
-                <template v-else>
-                  <md-option
-                    v-for="device in deviceSelectionList"
-                    :key="device.id"
-                    :value="device.serial"
+                <div class="md-layout-item md-size-100 md-small-size-100">
+                  <md-field
+                    :class="{
+                      'md-invalid': errors.has('energy-service-form.appliance'),
+                    }"
                   >
-                    {{ device.serial }}
-                  </md-option>
-                </template>
+                    <label for="appliance">
+                      {{ $tc("words.appliance") }}
+                    </label>
+                    <md-select
+                      name="appliance"
+                      id="eaas-appliance"
+                      v-model="selectedApplianceId"
+                      v-validate="'required'"
+                    >
+                      <md-option disabled value>
+                        --{{ $tc("words.select") }}--
+                      </md-option>
+                      <md-option
+                        :value="appliance.id"
+                        v-for="appliance in applianceService.list"
+                        :key="appliance.id"
+                      >
+                        {{ appliance.name }}
+                      </md-option>
+                    </md-select>
+                    <span class="md-error">
+                      {{ errors.first("energy-service-form.appliance") }}
+                    </span>
+                  </md-field>
+                </div>
+                <div class="md-layout-item md-size-50 md-small-size-100">
+                  <md-field>
+                    <label>{{ $tc("phrases.downPayment") }}</label>
+                    <md-input
+                      name="eaas-down-payment"
+                      type="number"
+                      min="0"
+                      v-model="applianceService.appliance.downPayment"
+                    />
+                  </md-field>
+                </div>
+                <div class="md-layout-item md-size-50 md-small-size-100">
+                  <md-field
+                    :class="{
+                      'md-invalid': errors.has(
+                        'energy-service-form.price_per_day',
+                      ),
+                    }"
+                  >
+                    <label>{{ $tc("phrases.pricePerDay") }}</label>
+                    <md-input
+                      name="price_per_day"
+                      type="number"
+                      min="0"
+                      v-model="pricePerDay"
+                      v-validate="'required|min_value:0|decimal'"
+                    />
+                    <span class="md-error">
+                      {{ errors.first("energy-service-form.price_per_day") }}
+                    </span>
+                  </md-field>
+                </div>
+                <div class="md-layout-item md-size-50 md-small-size-100">
+                  <md-field>
+                    <label>{{ $tc("phrases.minimumPayableAmount", 0) }}</label>
+                    <md-input
+                      name="eaas-minimum-payable-amount"
+                      type="number"
+                      min="0"
+                      v-model="minimumPayableAmount"
+                    />
+                  </md-field>
+                  <span v-if="eaasMinPaymentDaysText" class="eaas-helper-text">
+                    {{ eaasMinPaymentDaysText }}
+                  </span>
+                </div>
+                <div class="md-layout-item md-size-100 md-small-size-100">
+                  <p class="eaas-description">
+                    {{ $tc("phrases.eaasDescription") }}
+                  </p>
+                </div>
+              </form>
+            </md-tab>
+          </md-tabs>
+          <div class="md-layout-item md-size-100 md-small-size-100">
+            <template v-if="isDeviceSelectionRequired">
+              <md-field
+                :class="{
+                  'md-invalid': errors.has($tc('phrases.selectDevice')),
+                }"
+              >
+                <label>
+                  {{ $tc("phrases.selectDevice") }}
+                </label>
+                <md-select
+                  :name="$tc('phrases.selectDevice')"
+                  v-model="selectedDeviceSerial"
+                  v-validate="'required'"
+                  @md-opened="focusDeviceSearchInput"
+                  @md-closed="resetDeviceSearch"
+                >
+                  <div class="device-search-row" @click.stop @mousedown.stop>
+                    <md-field md-inline>
+                      <md-icon>search</md-icon>
+                      <md-input
+                        ref="deviceSearchInput"
+                        v-model="deviceSearchTerm"
+                        placeholder="Search by serial..."
+                        @click.native.stop
+                        @mousedown.native.stop
+                        @keydown.native.stop
+                      />
+                    </md-field>
+                  </div>
+                  <template v-if="!filteredDeviceSelectionList.length">
+                    <md-option disabled>
+                      <md-tooltip md-direction="top">
+                        Consider changing the search term or create a suitable
+                        device first.
+                      </md-tooltip>
+                      No available device found.
+                    </md-option>
+                  </template>
+                  <template v-else>
+                    <md-option
+                      v-for="device in filteredDeviceSelectionList"
+                      :key="device.id"
+                      :value="device.serial"
+                    >
+                      {{ device.serial }}
+                    </md-option>
+                  </template>
+                </md-select>
+                <span class="md-error">
+                  {{ errors.first($tc("phrases.selectDevice")) }}
+                </span>
+              </md-field>
+            </template>
+            <div class="coordinate-section">
+              <div class="md-layout md-gutter">
+                <div class="md-layout-item md-size-50 md-small-size-100">
+                  <md-field>
+                    <label for="device_latitude">
+                      {{ $tc("words.latitude") }}
+                    </label>
+                    <md-input
+                      id="device_latitude"
+                      name="device_latitude"
+                      :value="formattedDeviceLatitude"
+                      readonly
+                    />
+                  </md-field>
+                </div>
+                <div class="md-layout-item md-size-50 md-small-size-100">
+                  <md-field>
+                    <label for="device_longitude">
+                      {{ $tc("words.longitude") }}
+                    </label>
+                    <md-input
+                      id="device_longitude"
+                      name="device_longitude"
+                      :value="formattedDeviceLongitude"
+                      readonly
+                    />
+                  </md-field>
+                </div>
+              </div>
+              <md-button
+                class="md-primary md-raised coordinate-button"
+                type="button"
+                @click="openLocationPicker"
+              >
+                Set Device Location
+              </md-button>
+              <p class="coordinate-hint">
+                Device location defaults to the customer's primary address. Use
+                the map to adjust these coordinates if needed.
+              </p>
+            </div>
+          </div>
+          <div
+            v-if="paymentProviders.length > 0"
+            class="md-layout-item md-size-100 md-small-size-100"
+          >
+            <md-field>
+              <label>Payment Method</label>
+              <md-select v-model="paymentProvider" name="paymentMethod">
+                <md-option :value="0">Cash</md-option>
+                <md-option
+                  v-for="provider in paymentProviders"
+                  :key="provider.id"
+                  :value="provider.id"
+                >
+                  {{ provider.name }}
+                </md-option>
               </md-select>
-              <span class="md-error">
-                {{ errors.first($tc("phrases.selectDevice")) }}
-              </span>
             </md-field>
           </div>
-          <div v-if="applianceService.appliance.rate" style="padding: 1rem">
+          <div
+            v-if="
+              applianceService.appliance.rate && tabName !== 'energy-service'
+            "
+            style="padding: 1rem"
+          >
             <div
               style="
                 font-size: 1rem;
@@ -466,15 +580,59 @@
         </md-button>
       </md-dialog-actions>
     </md-dialog>
+    <md-dialog
+      :md-active.sync="showLocationPicker"
+      style="max-width: 70rem; margin: auto"
+    >
+      <md-dialog-title>Select Device Location</md-dialog-title>
+      <md-dialog-content style="overflow-y: visible">
+        <p class="coordinate-dialog-hint">
+          Click on the map to place the device marker. Only one marker is
+          allowed.
+        </p>
+        <DeviceLocationPickerMap
+          v-if="showLocationPicker"
+          :key="locationPickerKey"
+          :mapping-service="mappingService"
+          :map-container-id="locationPickerMapId"
+          :initial-location="initialDeviceLocationArray"
+          :marker-icon="getMarkerIconForAppliance(currentAppliance)"
+          @location-selected="handleLocationSelected"
+          @location-cleared="handleLocationCleared"
+        />
+      </md-dialog-content>
+      <md-dialog-actions>
+        <md-button
+          class="md-primary md-raised"
+          type="button"
+          :disabled="!pendingDeviceLocation"
+          @click="confirmDeviceLocation"
+        >
+          Use Location
+        </md-button>
+        <md-button type="button" @click="closeLocationPicker">
+          {{ $tc("words.cancel") }}
+        </md-button>
+      </md-dialog-actions>
+    </md-dialog>
   </div>
 </template>
 
 <script>
-import { currency, notify } from "@/mixins"
-import { ApplianceService } from "@/services/ApplianceService"
-import { AssetPersonService } from "@/services/AssetPersonService"
-import { DeviceService } from "@/services/DeviceService"
+import defaultMarker from "leaflet/dist/images/marker-icon.png"
 import { mapGetters } from "vuex"
+
+import DeviceLocationPickerMap from "./DeviceLocationPickerMap.vue"
+
+import { computeRateAmount } from "@/Helpers/applianceRates.js"
+import { ErrorHandler } from "@/Helpers/ErrorHandler.js"
+import { currency } from "@/mixins/currency.js"
+import { notify } from "@/mixins/notify.js"
+import { AppliancePaymentService } from "@/services/AppliancePaymentService.js"
+import { AppliancePersonService } from "@/services/AppliancePersonService.js"
+import { ApplianceService } from "@/services/ApplianceService.js"
+import { DeviceService } from "@/services/DeviceService.js"
+import { ICONS, MappingService } from "@/services/MappingService.js"
 import Loader from "@/shared/Loader.vue"
 
 const APPLIANCE_TYPE_SHS_ID = 1
@@ -484,6 +642,7 @@ export default {
   mixins: [currency, notify],
   components: {
     Loader,
+    DeviceLocationPickerMap,
   },
   props: {
     showSellApplianceModal: {
@@ -497,24 +656,58 @@ export default {
   data() {
     return {
       applianceService: new ApplianceService(),
-      assetPersonService: new AssetPersonService(),
+      appliancePersonService: new AppliancePersonService(),
+      appliancePaymentService: new AppliancePaymentService(),
       deviceService: new DeviceService(),
+      mappingService: new MappingService(),
       selectedApplianceId: null,
       deviceSelectionList: [],
       isDeviceSelectionRequired: false,
       minimumPayableAmount: 0,
+      pricePerDay: 0,
       selectedDeviceSerial: null,
       showRates: false,
       loading: false,
       tabName: "count-based",
-      selectedAddressId: null,
+      deviceLocation: null,
+      pendingDeviceLocation: null,
+      showLocationPicker: false,
+      locationPickerKey: 0,
+      locationPickerMapId: "",
+      internalDialogVisible: false,
+      paymentProviders: [],
+      paymentProvider: 0,
+      deviceSearchTerm: "",
     }
+  },
+  created() {
+    this.locationPickerMapId = `device-location-map-${this._uid}`
+    this.internalDialogVisible = this.showSellApplianceModal
   },
   beforeMount() {
     this.getApplianceList()
-    this.deviceService.getDevices()
+    this.initializeDeviceLocation()
   },
   methods: {
+    getMarkerIconForAppliance(appliance) {
+      if (!appliance) {
+        return defaultMarker
+      }
+      switch (appliance.applianceTypeId) {
+        case APPLIANCE_TYPE_SHS_ID:
+          return ICONS.SHS
+        case APPLIANCE_TYPE_E_BIKE_ID:
+          return ICONS.E_BIKE
+        default:
+          return ICONS.METER
+      }
+    },
+    handleDialogActive(value) {
+      this.internalDialogVisible = value
+      if (!value) {
+        this.$emit("hideModal")
+      }
+    },
     async getApplianceList() {
       try {
         await this.applianceService.getAppliances()
@@ -529,17 +722,26 @@ export default {
       const appliance = this.applianceService.list.find(
         (x) => x.id === this.applianceService.appliance.id,
       )
+      const isEnergyService = this.tabName === "energy-service"
       const isDeviceBindingRequired = this.isDeviceBindingRequired(appliance)
       if (isDeviceBindingRequired && !this.selectedDeviceSerial) {
         this.alertNotify("error", "Please select a device")
         return
       }
+      const locationPoints = this.getGeoPointsForAppliance()
+      if (!locationPoints) {
+        this.alertNotify("error", "Please set the device location")
+        return
+      }
+      const confirmText = isEnergyService
+        ? this.$tc("phrases.confirmEaas")
+        : this.$tc("phrases.sellAppliance", 2, {
+            cost: this.moneyFormat(this.applianceService.appliance.cost),
+          })
       this.$swal({
         type: "question",
-        title: this.$tc("phrases.sellAsset", 0),
-        text: this.$tc("phrases.sellAsset", 2, {
-          cost: this.moneyFormat(this.applianceService.appliance.cost),
-        }),
+        title: this.$tc("phrases.sellAppliance", 0),
+        text: confirmText,
         showCancelButton: true,
         cancelButtonText: this.$tc("words.cancel"),
         confirmButtonText: this.$tc("words.sell"),
@@ -547,25 +749,37 @@ export default {
         if (result.value) {
           try {
             this.loading = true
-            const points = isDeviceBindingRequired
-              ? await this.getGeoPointsForAppliance()
-              : null
+            const points = locationPoints
             const soldApplianceParams = {
               id: this.applianceService.appliance.id,
               personId: this.person.id,
               ...this.applianceService.appliance,
+              cost: isEnergyService ? 0 : this.applianceService.appliance.cost,
+              downPayment: this.applianceService.appliance.downPayment || 0,
+              rate: isEnergyService ? 0 : this.applianceService.appliance.rate,
+              paymentType: isEnergyService ? "energy_service" : "installment",
+              minimumPayableAmount: isEnergyService
+                ? this.minimumPayableAmount || null
+                : null,
+              pricePerDay: isEnergyService ? this.pricePerDay || null : null,
               points: points,
               userId: this.user.id,
               deviceSerial: this.selectedDeviceSerial,
-              address: this.person.addresses.find(
-                (x) => x.id === this.selectedAddressId,
-              ),
+              address: this.getSelectedAddress(),
+              paymentProvider: this.paymentProvider,
             }
             const soldAppliance =
-              await this.assetPersonService.sellAppliance(soldApplianceParams)
-            this.alertNotify("success", this.$tc("phrases.sellAsset", 1))
+              await this.appliancePersonService.sellAppliance(
+                soldApplianceParams,
+              )
+            if (soldAppliance.redirectUrl) {
+              window.open(soldAppliance.redirectUrl, "_blank")
+            }
+            this.alertNotify("success", this.$tc("phrases.sellAppliance", 1))
+            const appliancePersonId =
+              soldAppliance.appliancePerson?.id ?? soldAppliance.id
             await this.$router.push(
-              "/sold-appliance-detail/" + soldAppliance.id,
+              "/sold-appliance-detail/" + appliancePersonId,
             )
           } catch (e) {
             console.log(e)
@@ -575,20 +789,142 @@ export default {
         }
       })
     },
-    async getGeoPointsForAppliance() {
-      const address = this.person.addresses.find(
-        (x) => x.id === this.selectedAddressId,
-      )
-
-      return address.geo?.points || address.city?.location?.points
+    getGeoPointsForAppliance() {
+      if (this.deviceCoordinatesAvailable) {
+        return `${this.deviceLocation.lat},${this.deviceLocation.lon}`
+      }
+      const fallbackLocation = this.getFallbackLocationFromSelectedAddress()
+      if (fallbackLocation) {
+        const [lat, lon] = fallbackLocation
+        return `${lat},${lon}`
+      }
+      return null
     },
-    getRate(index, rateCount, cost) {
-      if (index === parseInt(rateCount)) {
-        return cost - (rateCount - 1) * Math.floor(cost / rateCount)
+    openLocationPicker() {
+      if (!this.deviceLocation) {
+        this.initializeDeviceLocation()
+      }
+      this.locationPickerKey += 1
+      const fallbackLocation = this.getFallbackLocationFromSelectedAddress()
+      const center = this.deviceCoordinatesAvailable
+        ? [this.deviceLocation.lat, this.deviceLocation.lon]
+        : fallbackLocation
+      if (center) {
+        this.mappingService.setCenter(center)
+      }
+      if (this.deviceCoordinatesAvailable) {
+        this.pendingDeviceLocation = { ...this.deviceLocation }
+      } else if (fallbackLocation) {
+        this.pendingDeviceLocation = {
+          lat: fallbackLocation[0],
+          lon: fallbackLocation[1],
+        }
       } else {
-        return Math.floor(cost / rateCount)
+        this.pendingDeviceLocation = null
+      }
+      this.showLocationPicker = true
+    },
+    closeLocationPicker() {
+      this.showLocationPicker = false
+      this.pendingDeviceLocation = null
+      this.locationPickerKey += 1
+    },
+    handleLocationSelected(location) {
+      this.pendingDeviceLocation = location
+    },
+    handleLocationCleared() {
+      this.pendingDeviceLocation = null
+    },
+    confirmDeviceLocation() {
+      if (this.pendingDeviceLocation) {
+        this.deviceLocation = {
+          lat: this.pendingDeviceLocation.lat,
+          lon: this.pendingDeviceLocation.lon,
+        }
+      } else {
+        const fallbackLocation = this.getFallbackLocationFromSelectedAddress()
+        this.deviceLocation = fallbackLocation
+          ? {
+              lat: fallbackLocation[0],
+              lon: fallbackLocation[1],
+            }
+          : null
+      }
+      this.closeLocationPicker()
+    },
+    initializeDeviceLocation() {
+      const fallbackLocation = this.getFallbackLocationFromSelectedAddress()
+      if (fallbackLocation) {
+        this.deviceLocation = {
+          lat: fallbackLocation[0],
+          lon: fallbackLocation[1],
+        }
+      } else {
+        this.deviceLocation = null
       }
     },
+    getSelectedAddress() {
+      const addresses = this.person.addresses || []
+      if (!addresses.length) return null
+      const primaryAddress = addresses.find(
+        (address) => address.isPrimary || address.is_primary,
+      )
+      return primaryAddress || addresses[0]
+    },
+    getFallbackLocationFromSelectedAddress() {
+      const address = this.getSelectedAddress()
+      if (!address) return null
+      const addressPoints = this.parsePoints(address.geo?.points)
+      if (addressPoints) return addressPoints
+      const cityPoints = this.parsePoints(address.city?.location?.points)
+      if (cityPoints) return cityPoints
+      return null
+    },
+    resetDeviceSelectionValidation() {
+      const fieldName = this.$tc("phrases.selectDevice")
+      if (
+        this.errors &&
+        typeof this.errors.has === "function" &&
+        this.errors.has(fieldName)
+      ) {
+        this.errors.remove(fieldName)
+      }
+      if (this.$validator && typeof this.$validator.reset === "function") {
+        this.$validator.reset(fieldName)
+      }
+    },
+    parsePoints(points) {
+      if (!points || typeof points !== "string") return null
+      const values = points.split(",").map((value) => value.trim())
+      if (values.length !== 2) return null
+      const lat = this.formatCoordinate(values[0], "lat")
+      const lon = this.formatCoordinate(values[1], "lon")
+      if (lat === null || lon === null) return null
+      return [lat, lon]
+    },
+    formatCoordinate(value, type) {
+      if (!this.isValidCoordinate(value, type)) return null
+      const number = Number(value)
+      return Number(number.toFixed(5))
+    },
+    isValidCoordinate(value, type) {
+      if (value === null || value === undefined) return false
+      const number = Number(value)
+      if (!Number.isFinite(number)) return false
+      if (type === "lat") {
+        return number >= -90 && number <= 90
+      }
+      if (type === "lon") {
+        return number >= -180 && number <= 180
+      }
+      return true
+    },
+    updateDeviceMarkerIcon(appliance) {
+      const icon = this.getMarkerIconForAppliance(appliance)
+      this.mappingService.setMarkerUrl(icon)
+      this.locationPickerKey += 1
+    },
+    getRate: computeRateAmount,
     checkDownPayment() {
       if (
         parseFloat(this.applianceService.appliance.downPayment) >
@@ -633,10 +969,22 @@ export default {
       )
     },
     isDeviceBindingRequired(appliance) {
+      if (!appliance) return false
       return (
-        appliance.assetTypeId === APPLIANCE_TYPE_SHS_ID ||
-        appliance.assetTypeId === APPLIANCE_TYPE_E_BIKE_ID
+        appliance.applianceTypeId === APPLIANCE_TYPE_SHS_ID ||
+        appliance.applianceTypeId === APPLIANCE_TYPE_E_BIKE_ID
       )
+    },
+    focusDeviceSearchInput() {
+      this.$nextTick(() => {
+        const input = this.$refs.deviceSearchInput
+        if (input && typeof input.focus === "function") {
+          input.focus()
+        }
+      })
+    },
+    resetDeviceSearch() {
+      this.deviceSearchTerm = ""
     },
   },
   computed: {
@@ -644,62 +992,133 @@ export default {
       settings: "settings/getMainSettings",
       user: "auth/getAuthenticateUser",
     }),
-    modalVisible: {
-      get() {
-        return this.showSellApplianceModal
-      },
-      set(value) {
-        // Emit the standard .sync update event
-        this.$emit("update:showSellApplianceModal", value)
-        // Also emit legacy hide event used by parents
-        if (!value) this.$emit("hideModal")
-      },
+    currentAppliance() {
+      return (
+        this.applianceService.list.find(
+          (x) => x.id === this.applianceService.appliance.id,
+        ) || null
+      )
     },
     showRatesButton() {
       return this.applianceService.appliance.rate > 1
     },
+    filteredDeviceSelectionList() {
+      const term = this.deviceSearchTerm.trim().toLowerCase()
+      if (!term) return this.deviceSelectionList
+      return this.deviceSelectionList.filter((device) =>
+        device.serial.toLowerCase().includes(term),
+      )
+    },
+    formattedDeviceLatitude() {
+      if (!this.deviceLocation) return ""
+      return this.deviceLocation.lat
+    },
+    formattedDeviceLongitude() {
+      if (!this.deviceLocation) return ""
+      return this.deviceLocation.lon
+    },
+    deviceCoordinatesAvailable() {
+      return (
+        this.deviceLocation &&
+        this.isValidCoordinate(this.deviceLocation.lat, "lat") &&
+        this.isValidCoordinate(this.deviceLocation.lon, "lon")
+      )
+    },
+    initialDeviceLocationArray() {
+      if (!this.deviceLocation) return null
+      return [this.deviceLocation.lat, this.deviceLocation.lon]
+    },
+    eaasMinPaymentDaysText() {
+      const amount = parseFloat(this.minimumPayableAmount)
+      const rate = parseFloat(this.pricePerDay)
+      if (!amount || !rate || rate <= 0) return ""
+      const days = Math.round((amount / rate) * 10) / 10
+      return `= ${days} day${days !== 1 ? "s" : ""} of service at ${this.moneyFormat(rate)}/day`
+    },
   },
   watch: {
+    async showSellApplianceModal(value) {
+      this.internalDialogVisible = value
+      if (value) {
+        this.locationPickerKey += 1
+        const providers =
+          await this.appliancePaymentService.getPaymentProviders()
+        if (!(providers instanceof ErrorHandler)) {
+          this.paymentProviders = providers
+        }
+      }
+    },
     async selectedApplianceId() {
       this.applianceService.appliance.id = this.selectedApplianceId
-      const availableDevices = this.deviceService.list.filter(
-        (device) => !device.person,
-      )
       const appliance = this.applianceService.list.find(
         (x) => x.id === this.applianceService.appliance.id,
       )
+      this.updateDeviceMarkerIcon(appliance)
       if (this.isDeviceBindingRequired(appliance)) {
         this.isDeviceSelectionRequired = true
-        this.deviceSelectionList = availableDevices
-          .filter((device) => {
-            switch (appliance.assetTypeId) {
-              case APPLIANCE_TYPE_SHS_ID:
-                return (
-                  device.deviceType === "solar_home_system" &&
-                  device.device.assetId === this.selectedApplianceId
-                )
-              case APPLIANCE_TYPE_E_BIKE_ID:
-                return (
-                  device.deviceType === "e_bike" &&
-                  device.device.assetId === this.selectedApplianceId
-                )
-              default:
-                return false
-            }
-          })
-          .map((device) => {
-            return {
-              id: device.id,
-              serial: device.deviceSerial,
-            }
-          })
+        this.selectedDeviceSerial = null
+        this.resetDeviceSelectionValidation()
+        await this.deviceService.getAvailableDevicesForAppliance(
+          this.selectedApplianceId,
+        )
+        this.deviceSelectionList = this.deviceService.list.map((device) => ({
+          id: device.id,
+          serial: device.deviceSerial,
+        }))
       } else {
         this.isDeviceSelectionRequired = false
         this.deviceSelectionList = []
+        this.selectedDeviceSerial = null
+        this.resetDeviceSelectionValidation()
       }
+      this.initializeDeviceLocation()
     },
   },
 }
 </script>
 
-<style scoped></style>
+<style scoped lang="scss">
+.coordinate-section {
+  margin-top: 1rem;
+}
+
+.coordinate-button {
+  margin-top: 0.5rem;
+}
+
+.coordinate-hint {
+  font-size: 0.875rem;
+  color: #666;
+  margin-top: 0.5rem;
+}
+
+.coordinate-dialog-hint {
+  font-size: 0.875rem;
+  color: #555;
+  margin-bottom: 1rem;
+}
+
+.eaas-helper-text {
+  display: block;
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: -0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.eaas-description {
+  font-size: 0.875rem;
+  color: #555;
+  margin-top: 0.5rem;
+  line-height: 1.5;
+}
+
+.device-search-row {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0 1rem;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+}
+</style>

@@ -1,6 +1,6 @@
-import { EventBus } from "@/shared/eventbus"
-import { ErrorHandler } from "@/Helpers/ErrorHandler"
-import AuthenticationRepository from "@/repositories/AuthenticationRepository"
+import { ErrorHandler } from "@/Helpers/ErrorHandler.js"
+import AuthenticationRepository from "@/repositories/AuthenticationRepository.js"
+import { EventBus } from "@/shared/eventbus.js"
 
 export class AuthenticationService {
   constructor() {
@@ -26,6 +26,8 @@ export class AuthenticationService {
         name: data.user.name,
         intervalId: 0,
         companyId: data.user.company_id,
+        roles: Array.isArray(data.roles) ? data.roles : [],
+        permissions: Array.isArray(data.permissions) ? data.permissions : [],
       }
       localStorage.setItem("token", this.authenticateUser.token)
       this.startTimer()
@@ -53,9 +55,9 @@ export class AuthenticationService {
     }
   }
 
-  async refreshToken(token, intervalId) {
+  async refreshToken(intervalId) {
     try {
-      let response = await this.repository.refresh(token)
+      let response = await this.repository.refresh()
       clearInterval(intervalId)
       if (response.status === 200) {
         return this._fetchData(response.data)

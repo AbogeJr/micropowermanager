@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
+use App\DTO\ClusterDashboardData;
 use Illuminate\Support\Facades\Cache;
-use MPM\Device\ClusterDeviceService;
 use Nette\Utils\DateTime;
 
 class ClustersDashboardCacheDataService extends AbstractDashboardCacheDataService {
@@ -18,6 +18,7 @@ class ClustersDashboardCacheDataService extends AbstractDashboardCacheDataServic
         private ClusterTransactionService $clusterTransactionsService,
         private ClusterPopulationService $clusterPopulationService,
         private ClusterDeviceService $clusterDeviceService,
+        private AppliancePersonService $appliancePersonService,
     ) {
         parent::__construct(self::CACHE_KEY_CLUSTERS_DATA);
     }
@@ -26,14 +27,14 @@ class ClustersDashboardCacheDataService extends AbstractDashboardCacheDataServic
      * @param array<string> $dateRange
      */
     public function setData(array $dateRange = []): void {
-        if (empty($dateRange)) {
+        if ($dateRange === []) {
             // Set $startDate to 3 months ago
             $startDate = date('Y-m-d', strtotime('-3 months'));
             $endDate = date('Y-m-d H:i:s', strtotime('today'));
             $dateRange[0] = $startDate;
             $dateRange[1] = $endDate;
         } else {
-            list($startDate, $endDate) = $dateRange;
+            [$startDate, $endDate] = $dateRange;
         }
 
         $monthlyPeriods = $this->periodService->generatePeriodicList($startDate, $endDate, 'monthly', [
@@ -45,28 +46,21 @@ class ClustersDashboardCacheDataService extends AbstractDashboardCacheDataServic
         $clusters = $this->clusterMiniGridService->getClustersWithMiniGrids();
         $connectionTypes = $this->connectionTypeService->getAll();
 
-        foreach ($clusters as $index => $cluster) {
+        $clusterDashboardData = [];
+        foreach ($clusters as $cluster) {
             $devicesInCluster = $this->clusterDeviceService->getByClusterId($cluster->id);
-            $clusters[$index]->deviceCount = $devicesInCluster->count();
             $meters = $this->clusterDeviceService->getMetersByClusterId($cluster->id);
-            $clusters[$index]->meterCount = $meters->count();
-            $clusters[$index]->revenue = $this->clusterTransactionsService->getById($cluster->id, $dateRange);
+            $meterCount = $meters->count();
+            $applianceCount = $this->appliancePersonService->getCountByClusterId($cluster->id);
+            $revenue = $this->clusterTransactionsService->getById($cluster->id, $dateRange);
+            $population = $this->clusterPopulationService->getById($cluster->id);
 
-            $clusters[$index]->population = $this->clusterPopulationService->getById($cluster->id);
-            $clusters[$index]->citiesRevenue =
-                $this->clusterRevenueService->getMonthlyMiniGridBasedRevenueById($cluster->id);
-            $clusters[$index]->revenueAnalysis =
-                $this->clusterRevenueService->getMonthlyRevenueAnalysisForConnectionTypesById(
-                    $cluster->id,
-                    $connectionTypes,
-                );
-            $clusters[$index]->clusterData =
-                $this->clusterService->getCluster(
-                    $this->clusterService->getById($cluster->id),
-                    $clusters[$index]->meterCount,
-                    $clusters[$index]->revenue,
-                    $clusters[$index]->population
-                );
+            $citiesRevenue = $this->clusterRevenueService->getMonthlyMiniGridBasedRevenueById($cluster->id);
+            $revenueAnalysis = $this->clusterRevenueService->getMonthlyRevenueAnalysisForConnectionTypesById(
+                $cluster->id,
+                $connectionTypes,
+            );
+
             $periodicRevenue = $this->clusterRevenueService->getPeriodicRevenueForCluster(
                 $cluster,
                 $startDate,
@@ -74,10 +68,21 @@ class ClustersDashboardCacheDataService extends AbstractDashboardCacheDataServic
                 $monthlyPeriods,
                 $weeklyPeriods
             );
-            $clusters[$index]->period = $periodicRevenue['period'];
-            $clusters[$index]->periodWeekly = $periodicRevenue['periodWeekly'];
-            $clusters[$index]->totalRevenue = $periodicRevenue['totalRevenue'];
+
+            $clusterDashboardData[] = new ClusterDashboardData(
+                cluster: $this->clusterService->getById($cluster->id),
+                deviceCount: $devicesInCluster->count(),
+                meterCount: $meterCount,
+                applianceCount: $applianceCount,
+                revenue: $revenue,
+                population: $population,
+                citiesRevenue: $citiesRevenue,
+                revenueAnalysis: $revenueAnalysis,
+                period: $periodicRevenue['period'],
+                periodWeekly: $periodicRevenue['periodWeekly'],
+                totalRevenue: $periodicRevenue['totalRevenue'],
+            );
         }
-        Cache::put(self::cacheKeyGenerator(), $clusters, DateTime::from('+ 1 day'));
+        Cache::put(self::cacheKeyGenerator(), $clusterDashboardData, DateTime::from('+ 1 day'));
     }
 }

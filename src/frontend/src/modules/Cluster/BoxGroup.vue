@@ -1,20 +1,20 @@
 <template>
   <div class="md-layout md-gutter" v-if="Object.keys(cluster).length">
     <div
-      class="md-layout-item md-medium-size-50 md-xsmall-size-100 md-size-25 small-size-style"
+      class="md-layout-item md-medium-size-50 md-xsmall-size-100 md-size-20 small-size-style"
     >
       <box
         :box-color="'blue'"
         :center-text="true"
         :header-text="$tc('words.miniGrid')"
         :header-text-color="'#dddddd'"
-        :sub-text="cluster.mini_grids.length.toString()"
+        :sub-text="miniGridCount.toString()"
         :sub-text-color="'#e3e3e3'"
         :box-icon="'map'"
       />
     </div>
     <div
-      class="md-layout-item md-medium-size-50 md-xsmall-size-100 md-size-25 small-size-style"
+      class="md-layout-item md-medium-size-50 md-xsmall-size-100 md-size-20 small-size-style"
     >
       <box
         :box-color="'orange'"
@@ -25,7 +25,7 @@
       />
     </div>
     <div
-      class="md-layout-item md-medium-size-50 md-xsmall-size-100 md-size-25 small-size-style"
+      class="md-layout-item md-medium-size-50 md-xsmall-size-100 md-size-20 small-size-style"
     >
       <box
         :box-color="'red'"
@@ -36,7 +36,18 @@
       />
     </div>
     <div
-      class="md-layout-item md-medium-size-50 md-xsmall-size-100 md-size-25 small-size-style"
+      class="md-layout-item md-medium-size-50 md-xsmall-size-100 md-size-20 small-size-style"
+    >
+      <box
+        :box-color="'purple'"
+        :center-text="true"
+        :header-text="$tc('phrases.soldAppliances')"
+        :sub-text="applianceCount.toString()"
+        :box-icon="'shopping_cart'"
+      />
+    </div>
+    <div
+      class="md-layout-item md-medium-size-50 md-xsmall-size-100 md-size-20 small-size-style"
     >
       <box
         v-if="cluster.revenue.toString()"
@@ -59,8 +70,8 @@
 </template>
 
 <script>
+import { currency } from "@/mixins/currency.js"
 import Box from "@/shared/Box.vue"
-import { currency } from "@/mixins/currency"
 
 export default {
   name: "BoxGroup",
@@ -75,10 +86,22 @@ export default {
   data: () => ({
     boxData: [],
   }),
+  computed: {
+    miniGridCount() {
+      const clusterData = this.cluster.clusterData
+      if (clusterData && clusterData.mini_grids) {
+        return clusterData.mini_grids.length
+      }
+      return 0
+    },
+    applianceCount() {
+      return this.cluster.applianceCount || 0
+    },
+  },
 }
 </script>
 
-<style>
+<style scoped lang="scss">
 @media screen and (max-width: 1280px) {
   .small-size-style {
     margin-bottom: 1rem !important;

@@ -2,30 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
+use App\Utils\DemoCompany;
+use Dedoc\Scramble\Attributes\BodyParameter;
+use Dedoc\Scramble\Attributes\Group;
 use Illuminate\Http\JsonResponse;
 use Tymon\JWTAuth\JWTGuard;
 
-/**
- * @group   Authenticator
- * Class AuthController
- * Responsible for API-Call authentications.
- */
+#[Group('Auth', 'Responsible for API-Call authentications', weight: 0)]
 class AuthController extends Controller {
     /**
-     * Create a new AuthController instance.
+     * User login.
      *
-     * @return void
+     * Login a user of the Web App and get JWT token via given credentials.
      */
-    public function __construct() {
-        $this->middleware('auth:api', ['except' => ['login']]);
-    }
-
-    /**
-     * JWT authentication.
-     *
-     * @bodyParam email string required
-     * @bodyParam password string required
-     */
+    #[BodyParameter('email', type: 'string', format: 'email', example: DemoCompany::DEMO_COMPANY_ADMIN_EMAIL)]
+    #[BodyParameter('password', type: 'string', format: 'password', example: DemoCompany::DEMO_COMPANY_PASSWORD)]
     public function login(): JsonResponse {
         $credentials = request(['email', 'password']);
 
@@ -38,17 +30,35 @@ class AuthController extends Controller {
 
     /**
      * Get the authenticated User.
-     *
-     * @return JsonResponse
      */
     public function me(): JsonResponse {
-        return response()->json(auth('api')->user());
+        $user = auth('api')->user();
+
+        if (method_exists($user, 'getRoleNames')) {
+            /** @var User $user */
+            $roles = $user->getRoleNames()->toArray();
+        } else {
+            $roles = [];
+        }
+        if (method_exists($user, 'getAllPermissions')) {
+            /** @var User $user */
+            $permissions = $user->getAllPermissions()->pluck('name')->toArray();
+        } else {
+            $permissions = [];
+        }
+
+        return response()->json([
+            /* @var User */
+            'user' => $user,
+            'roles' => $roles,
+            'permissions' => $permissions,
+        ]);
     }
 
     /**
-     * Log the user out (Invalidate the token).
+     * User logout.
      *
-     * @return JsonResponse
+     * Logout the user and invalidate the JWT token.
      */
     public function logout(): JsonResponse {
         auth('api')->logout();
@@ -57,37 +67,44 @@ class AuthController extends Controller {
     }
 
     /**
-     * Refresh token
-     * Generates a new valid token for the next 3600 seconds
-     * Inorder to generate the new token, a working (Bearer)token has to be provided in the header.
+     * Refresh User token.
      *
-     * @return JsonResponse
+     * Rotates the bearer token in the request for a fresh one. Accepts expired tokens within JWT_REFRESH_TTL.
+     * Rejects tokens past that window or with an invalid signature.
      */
-    public function refresh() {
+    public function refresh(): JsonResponse {
         /** @var JWTGuard $guard */
         $guard = auth()->guard('api');
+        $newToken = $guard->refresh();
+        // refresh() rotates the token but does not populate the guard's user
+        // cache. The route runs without auth:api so we authenticate with the
+        // freshly issued token before respondWithToken reads the user.
+        $guard->setToken($newToken)->authenticate();
 
-        return $this->respondWithToken($guard->refresh());
+        return $this->respondWithToken($newToken);
     }
 
     /**
      * Get the token array structure.
      *
      * @param string $token
-     *
-     * @return JsonResponse
      */
     protected function respondWithToken($token): JsonResponse {
         /** @var JWTGuard $guard */
         $guard = auth()->guard('api');
 
-        return response()->json(
-            [
-                'access_token' => $token,
-                'token_type' => 'bearer',
-                'expires_in' => $guard->factory()->getTTL() * 60,
-                'user' => auth('api')->user(),
-            ]
-        );
+        /** @var User $user */
+        $user = auth('api')->user();
+        $roles = $user->getRoleNames()->toArray();
+        $permissions = $user->getAllPermissions()->pluck('name')->toArray();
+
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => $guard->factory()->getTTL() * 60,
+            'user' => $user,
+            'roles' => $roles,
+            'permissions' => $permissions,
+        ]);
     }
 }

@@ -7,8 +7,6 @@ use Illuminate\Foundation\Http\FormRequest;
 class CreateAgentAssignedApplianceRequest extends FormRequest {
     /**
      * Determine if the user is authorized to make this request.
-     *
-     * @return bool
      */
     public function authorize(): bool {
         return true;
@@ -21,10 +19,10 @@ class CreateAgentAssignedApplianceRequest extends FormRequest {
      */
     public function rules(): array {
         return [
-            'agent_id' => 'required',
-            'user_id' => 'required',
-            'appliance_id' => 'required',
-            'cost' => 'required|regex:/^\d*(\.\d{1,2})?$/',
+            'agent_id' => ['required'],
+            'user_id' => ['required'],
+            'appliance_id' => ['required'],
+            'cost' => ['required', 'regex:/^\d*(\.\d{1,2})?$/'],
         ];
     }
 }

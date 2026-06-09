@@ -1,7 +1,6 @@
-import Client from "@/repositories/Client/AxiosClient"
-import { baseUrl } from "@/repositories/Client/AxiosClient"
+import Client from "@/repositories/Client/AxiosClient.js"
 
-const resource = `${baseUrl}/api/cities`
+const resource = `/api/cities`
 
 export default {
   list() {
@@ -9,5 +8,11 @@ export default {
   },
   create(city) {
     return Client.post(`${resource}`, city)
+  },
+  update(cityId, city) {
+    return Client.put(`${resource}/${cityId}`, city)
+  },
+  delete(cityId) {
+    return Client.delete(`${resource}/${cityId}`)
   },
 }

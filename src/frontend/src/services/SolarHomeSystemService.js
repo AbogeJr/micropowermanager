@@ -1,11 +1,12 @@
-import { Paginator } from "@/Helpers/Paginator"
+import { ErrorHandler } from "@/Helpers/ErrorHandler.js"
+import { Paginator } from "@/Helpers/Paginator.js"
 import {
   convertObjectKeysToCamelCase,
   convertObjectKeysToSnakeCase,
-} from "@/Helpers/Utils"
-import { ErrorHandler } from "@/Helpers/ErrorHandler"
-import { EventBus } from "@/shared/eventbus"
-import SolarHomeSystemRepository from "@/repositories/SolarHomeSystemRepository"
+} from "@/Helpers/Utils.js"
+import SolarHomeSystemRepository from "@/repositories/SolarHomeSystemRepository.js"
+import { resources } from "@/resources.js"
+import { EventBus } from "@/shared/eventbus.js"
 
 export class Transactions {
   constructor(shsId) {
@@ -34,8 +35,8 @@ export class SolarHomeSystemService {
     this.paginator = new Paginator(this.repository.resource)
     this.list = []
     this.shs = {
-      serialNumber: null,
-      assetId: null,
+      serialNumbers: [],
+      applianceId: null,
       manufacturerId: null,
       personId: null,
     }
@@ -53,6 +54,21 @@ export class SolarHomeSystemService {
         return new ErrorHandler(error, "http", status)
 
       return data.data
+    } catch (e) {
+      const errorMessage = e.response.data.message
+      return new ErrorHandler(errorMessage, "http")
+    }
+  }
+  async updateSolarHomeSystem(shsId, payload) {
+    try {
+      const { data, status, error } = await this.repository.update(
+        shsId,
+        convertObjectKeysToSnakeCase(payload),
+      )
+      if (status !== 200 && status !== 201)
+        return new ErrorHandler(error, "http", status)
+
+      return convertObjectKeysToCamelCase(data.data)
     } catch (e) {
       const errorMessage = e.response.data.message
       return new ErrorHandler(errorMessage, "http")
