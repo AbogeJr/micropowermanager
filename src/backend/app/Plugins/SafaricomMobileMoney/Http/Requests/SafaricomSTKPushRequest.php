@@ -13,8 +13,12 @@ class SafaricomSTKPushRequest extends FormRequest {
         return [
             'amount' => 'required|numeric|min:1|max:150000',
             'phone_number' => 'required|string|regex:/^254[0-9]{9}$/',
+            'customer_id' => 'required|integer|min:1',
+            'device_serial' => 'nullable|string|max:100',
+            'serial_id' => 'nullable|string|max:100',
             'account_reference' => 'nullable|string|max:50',
             'transaction_desc' => 'nullable|string|max:50',
+            'type' => 'nullable|string|in:energy,deferred_payment,down_payment',
         ];
     }
 

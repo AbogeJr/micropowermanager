@@ -1,72 +1,70 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Plugins\SafaricomMobileMoney\Services;
 
+use App\Plugins\SafaricomMobileMoney\Models\SafaricomCredential;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use App\Plugins\SafaricomMobileMoney\Models\SafaricomSettings;
 
 class SafaricomAuthService {
-    private const CACHE_KEY = 'safaricom_access_token';
     private const CACHE_TTL = 3500; // 1 hour - 100 seconds buffer
 
     public function __construct(
-        private SafaricomSettings $settings,
+        private SafaricomCredential $credential,
     ) {}
 
-    /**
-     * Get a valid access token for Safaricom API.
-     *
-     * @return string
-     */
     public function getAccessToken(): string {
-        return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
-            return $this->generateAccessToken();
-        });
-    }
-
-    /**
-     * Generate a new access token from Safaricom API.
-     *
-     * @return string
-     *
-     * @throws \Exception
-     */
-    private function generateAccessToken(): string {
-        $settings = $this->settings->query()->first();
-        if (!$settings) {
-            throw new \Exception('Safaricom settings not configured');
+        $credential = $this->credential->newQuery()->first();
+        if (!$credential) {
+            throw new \RuntimeException('Safaricom credentials are not configured.');
         }
 
-        $baseUrl = config('safaricom-mobile-money.api.base_url');
-        $consumerKey = $settings->consumer_key;
-        $consumerSecret = $settings->consumer_secret;
+        return Cache::remember(
+            $this->cacheKey($credential->getEnvironment()),
+            self::CACHE_TTL,
+            fn () => $this->generateAccessToken($credential),
+        );
+    }
 
-        $credentials = base64_encode($consumerKey.':'.$consumerSecret);
+    public function clearAccessToken(): void {
+        Cache::forget($this->cacheKey('sandbox'));
+        Cache::forget($this->cacheKey('production'));
+    }
+
+    private function generateAccessToken(SafaricomCredential $credential): string {
+        $consumerKey = $credential->getConsumerKey();
+        $consumerSecret = $credential->getConsumerSecret();
+
+        if ($consumerKey === '' || $consumerSecret === '') {
+            throw new \RuntimeException('Safaricom consumer key/secret are missing.');
+        }
 
         $response = Http::withHeaders([
-            'Authorization' => 'Basic '.$credentials,
+            'Authorization' => 'Basic '.base64_encode($consumerKey.':'.$consumerSecret),
             'Content-Type' => 'application/json',
-        ])->get($baseUrl.'/oauth/v1/generate?grant_type=client_credentials');
+        ])->get($this->getBaseUrl($credential).'/oauth/v1/generate?grant_type=client_credentials');
 
         if (!$response->successful()) {
-            throw new \Exception('Failed to generate access token: '.$response->body());
+            throw new \RuntimeException('Failed to obtain Safaricom access token: '.$response->body());
         }
 
-        $data = $response->json();
-        if (!isset($data['access_token'])) {
-            throw new \Exception('Invalid response from Safaricom API');
+        $token = $response->json('access_token');
+        if (!is_string($token) || $token === '') {
+            throw new \RuntimeException('Safaricom token endpoint returned no access_token.');
         }
 
-        return $data['access_token'];
+        return $token;
     }
 
-    /**
-     * Clear the cached access token.
-     *
-     * @return void
-     */
-    public function clearAccessToken(): void {
-        Cache::forget(self::CACHE_KEY);
+    private function getBaseUrl(SafaricomCredential $credential): string {
+        return $credential->isProduction()
+            ? (string) config('safaricom-mobile-money.api.production_url', 'https://api.safaricom.co.ke')
+            : (string) config('safaricom-mobile-money.api.sandbox_url', 'https://sandbox.safaricom.co.ke');
+    }
+
+    private function cacheKey(string $environment): string {
+        return 'safaricom:access_token:'.$environment;
     }
 }

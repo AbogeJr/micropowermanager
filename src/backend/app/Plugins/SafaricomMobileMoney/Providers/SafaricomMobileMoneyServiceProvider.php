@@ -6,6 +6,9 @@ namespace App\Plugins\SafaricomMobileMoney\Providers;
 
 use App\Plugins\SafaricomMobileMoney\Console\Commands\InstallPackage;
 use App\Plugins\SafaricomMobileMoney\Models\SafaricomTransaction;
+use App\Plugins\SafaricomMobileMoney\Services\SafaricomAuthService;
+use App\Plugins\SafaricomMobileMoney\Services\SafaricomCredentialService;
+use App\Plugins\SafaricomMobileMoney\Services\SafaricomTransactionService;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\ServiceProvider;
 
@@ -17,6 +20,11 @@ class SafaricomMobileMoneyServiceProvider extends ServiceProvider {
         Relation::morphMap([
             SafaricomTransaction::RELATION_NAME => SafaricomTransaction::class,
         ]);
+
+        $this->app->singleton(SafaricomCredentialService::class);
+        $this->app->singleton(SafaricomAuthService::class);
+        $this->app->singleton(SafaricomTransactionService::class);
+        $this->app->singleton('SafaricomMobileMoney', SafaricomMobileMoneyTransactionProvider::class);
     }
 
     public function register(): void {

@@ -1,201 +1,413 @@
 <template>
-  <div class="safaricom-mobile-money">
-    <div class="row">
-      <div class="col-md-12">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Safaricom M-PESA Settings</h3>
-          </div>
-          <div class="card-body">
-            <form @submit.prevent="saveSettings">
-              <div class="form-group">
-                <label>Consumer Key</label>
-                <input
-                  v-model="settings.consumer_key"
-                  type="text"
-                  class="form-control"
-                  required
-                />
-              </div>
-              <div class="form-group">
-                <label>Consumer Secret</label>
-                <input
-                  v-model="settings.consumer_secret"
-                  type="password"
-                  class="form-control"
-                  required
-                />
-              </div>
-              <div class="form-group">
-                <label>Passkey</label>
-                <input
-                  v-model="settings.passkey"
-                  type="password"
-                  class="form-control"
-                  required
-                />
-              </div>
-              <div class="form-group">
-                <label>Shortcode</label>
-                <input
-                  v-model="settings.shortcode"
-                  type="text"
-                  class="form-control"
-                  required
-                />
-              </div>
-              <div class="form-group">
-                <label>Environment</label>
-                <select v-model="settings.environment" class="form-control">
-                  <option value="sandbox">Sandbox</option>
-                  <option value="production">Production</option>
-                </select>
-              </div>
-              <button type="submit" class="btn btn-primary">Save Settings</button>
-            </form>
-          </div>
+  <div>
+    <div class="overview-line">
+      <div class="md-layout md-gutter">
+        <div
+          class="md-layout-item md-small-size-100 md-xsmall-size-100 md-medium-size-100 md-size-25"
+        >
+          <box
+            :box-color="'green'"
+            :center-text="true"
+            :header-text="'Total Transactions'"
+            :sub-text="stats.totalTransactions.toString()"
+            :box-icon="'payment'"
+          />
+        </div>
+        <div
+          class="md-layout-item md-small-size-100 md-xsmall-size-100 md-medium-size-100 md-size-25"
+        >
+          <box
+            :box-color="'blue'"
+            :center-text="true"
+            :header-text="'Successful Payments'"
+            :sub-text="stats.successfulTransactions.toString()"
+            :box-icon="'check_circle'"
+          />
+        </div>
+        <div
+          class="md-layout-item md-small-size-100 md-xsmall-size-100 md-medium-size-100 md-size-25"
+        >
+          <box
+            :box-color="'orange'"
+            :center-text="true"
+            :header-text="'Pending Payments'"
+            :sub-text="stats.pendingTransactions.toString()"
+            :box-icon="'schedule'"
+          />
+        </div>
+        <div
+          class="md-layout-item md-small-size-100 md-xsmall-size-100 md-medium-size-100 md-size-25"
+        >
+          <box
+            :box-color="credentialStatus.color"
+            :center-text="true"
+            :header-text="'Configuration'"
+            :sub-text="credentialStatus.text"
+            :box-icon="'settings'"
+          />
         </div>
       </div>
     </div>
 
-    <div class="row mt-4">
-      <div class="col-md-12">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Recent Transactions</h3>
+    <div v-if="recentTransactions.length > 0" class="overview-line">
+      <md-card class="recent-card">
+        <md-card-header>
+          <div class="recent-card__header">
+            <h3 class="recent-card__title">Latest transactions</h3>
+            <md-button
+              class="md-primary md-dense recent-card__view-all"
+              @click="goToTransactions"
+            >
+              View all
+            </md-button>
           </div>
-          <div class="card-body">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Reference ID</th>
-                  <th>Amount</th>
-                  <th>Phone Number</th>
-                  <th>Status</th>
-                  <th>Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="transaction in transactions" :key="transaction.reference_id">
-                  <td>{{ transaction.reference_id }}</td>
-                  <td>{{ transaction.amount }}</td>
-                  <td>{{ transaction.phone_number }}</td>
-                  <td>
-                    <span :class="getStatusClass(transaction.status)">
-                      {{ transaction.status }}
-                    </span>
-                  </td>
-                  <td>{{ formatDate(transaction.created_at) }}</td>
-                  <td>
-                    <button
-                      class="btn btn-sm btn-info"
-                      @click="checkStatus(transaction.reference_id)"
-                    >
-                      Check Status
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+        </md-card-header>
+        <md-card-content>
+          <md-table>
+            <md-table-row>
+              <md-table-head>ID</md-table-head>
+              <md-table-head>Amount</md-table-head>
+              <md-table-head>Status</md-table-head>
+              <md-table-head>Phone</md-table-head>
+              <md-table-head>M-Pesa Receipt</md-table-head>
+              <md-table-head>Created</md-table-head>
+            </md-table-row>
+            <md-table-row
+              v-for="item in recentTransactions"
+              :key="item.id"
+              class="recent-card__row"
+              @click.native="goToTransactions"
+            >
+              <md-table-cell md-label="ID">{{ item.id }}</md-table-cell>
+              <md-table-cell md-label="Amount">
+                {{ formatAmount(item.amount, item.currency) }}
+              </md-table-cell>
+              <md-table-cell md-label="Status">
+                <md-chip
+                  :class="[
+                    'safaricom-status-chip',
+                    getStatusClass(item.status),
+                  ]"
+                  md-label=""
+                >
+                  {{ getStatusText(item.status) }}
+                </md-chip>
+              </md-table-cell>
+              <md-table-cell md-label="Phone">
+                {{ item.phone_number || "—" }}
+              </md-table-cell>
+              <md-table-cell md-label="M-Pesa Receipt">
+                {{ item.mpesa_receipt_number || "—" }}
+              </md-table-cell>
+              <md-table-cell md-label="Created">
+                {{ formatDate(item.created_at) }}
+              </md-table-cell>
+            </md-table-row>
+          </md-table>
+        </md-card-content>
+      </md-card>
+    </div>
+
+    <div v-if="!isFullyConfigured" class="overview-line">
+      <md-card class="setup-prompt">
+        <md-card-content class="setup-prompt__row">
+          <md-icon class="setup-prompt__icon">info</md-icon>
+          <div class="setup-prompt__text-block">
+            <h3 class="setup-prompt__title">{{ setupPrompt.title }}</h3>
+            <p class="setup-prompt__text">{{ setupPrompt.description }}</p>
           </div>
-        </div>
-      </div>
+          <md-button
+            class="md-raised md-primary setup-prompt__cta"
+            @click="goToCredentials"
+          >
+            {{ setupPrompt.cta }}
+          </md-button>
+        </md-card-content>
+      </md-card>
     </div>
   </div>
 </template>
 
 <script>
-import moment from 'moment'
-import { mapState } from 'vuex'
+import { CredentialService } from "../../services/CredentialService.js"
+import { TransactionService } from "../../services/TransactionService.js"
 
 import { notify } from "@/mixins/notify.js"
+import Box from "@/shared/Box.vue"
+import { EventBus } from "@/shared/eventbus.js"
+
+const RECENT_LIMIT = 5
 
 export default {
-  name: 'SafaricomMobileMoneyOverview',
+  name: "Overview",
   mixins: [notify],
+  components: { Box },
   data() {
     return {
-      settings: {
-        consumer_key: '',
-        consumer_secret: '',
-        passkey: '',
-        shortcode: '',
-        environment: 'sandbox'
+      transactionService: new TransactionService(),
+      credentialService: new CredentialService(),
+      credentials: {
+        consumerKeySet: false,
+        consumerSecretSet: false,
+        passkeySet: false,
+        shortcode: "",
       },
-      transactions: []
+      stats: {
+        totalTransactions: 0,
+        successfulTransactions: 0,
+        pendingTransactions: 0,
+      },
+      recentTransactions: [],
+      loading: false,
     }
+  },
+  async mounted() {
+    await this.loadStats()
+    await this.checkCredentialStatus()
+
+    EventBus.$on("credential-updated", this.onCredentialUpdated)
+  },
+  beforeDestroy() {
+    EventBus.$off("credential-updated", this.onCredentialUpdated)
   },
   computed: {
-    ...mapState({
-      baseUrl: state => state.baseUrl
-    })
+    hasSecrets() {
+      return (
+        this.credentials.consumerKeySet &&
+        this.credentials.consumerSecretSet &&
+        this.credentials.passkeySet
+      )
+    },
+    isFullyConfigured() {
+      return this.hasSecrets && Boolean(this.credentials.shortcode)
+    },
+    credentialStatus() {
+      if (!this.hasSecrets) {
+        return { color: "red", text: "Not Configured" }
+      }
+      if (!this.credentials.shortcode) {
+        return { color: "orange", text: "Shortcode Missing" }
+      }
+      return { color: "green", text: "Configured" }
+    },
+    setupPrompt() {
+      if (!this.hasSecrets) {
+        return {
+          title: "Finish setting up Safaricom M-PESA",
+          description:
+            "Add your Daraja consumer key, consumer secret and passkey so customers can start paying.",
+          cta: "Configure credentials",
+        }
+      }
+      return {
+        title: "Shortcode missing",
+        description:
+          "Credentials are saved but no shortcode is set. Add your Paybill or Till number so STK Push requests can route correctly.",
+        cta: "Open credentials",
+      }
+    },
   },
   methods: {
-    async saveSettings() {
+    async loadStats() {
       try {
-        await this.$http.post(
-          `${this.baseUrl}/safaricom/settings`,
-          this.settings
-        )
-        this.alertNotify('success', 'Settings saved successfully')
+        this.loading = true
+        const response = await this.transactionService.getTransactions()
+        const transactions = response.data.data || []
+
+        this.stats.totalTransactions = transactions.length
+        this.stats.successfulTransactions = transactions.filter(
+          (t) => t.status === 1 || t.status === 2,
+        ).length
+        this.stats.pendingTransactions = transactions.filter(
+          (t) => t.status === 0,
+        ).length
+
+        this.recentTransactions = [...transactions]
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .slice(0, RECENT_LIMIT)
       } catch (error) {
-        this.alertNotify('error', error.response?.data?.message || 'Failed to save settings')
+        console.error("Error loading Safaricom stats:", error)
+        this.alertNotify("error", "Failed to load transaction statistics")
+      } finally {
+        this.loading = false
       }
     },
-    async loadSettings() {
+
+    async checkCredentialStatus() {
       try {
-        const response = await this.$http.get(`${this.baseUrl}/safaricom/settings`)
-        this.settings = response.data.data
+        const credential = await this.credentialService.getCredential()
+        if (credential) {
+          this.credentials = {
+            consumerKeySet: Boolean(credential.consumerKeySet),
+            consumerSecretSet: Boolean(credential.consumerSecretSet),
+            passkeySet: Boolean(credential.passkeySet),
+            shortcode: credential.shortcode || "",
+          }
+        }
       } catch (error) {
-        this.alertNotify('error', 'Failed to load settings')
+        console.error("Error checking Safaricom credentials:", error)
+        this.credentials = {
+          consumerKeySet: false,
+          consumerSecretSet: false,
+          passkeySet: false,
+          shortcode: "",
+        }
       }
     },
-    async loadTransactions() {
-      try {
-        const response = await this.$http.get(`${this.baseUrl}/safaricom/transactions`)
-        this.transactions = response.data.data
-      } catch (error) {
-        this.alertNotify('error', 'Failed to load transactions')
-      }
+
+    onCredentialUpdated() {
+      this.checkCredentialStatus()
     },
-    async checkStatus(referenceId) {
-      try {
-        const response = await this.$http.get(
-          `${this.baseUrl}/safaricom/transaction/${referenceId}/status`
-        )
-        this.alertNotify('success', `Transaction status: ${response.data.data.status}`)
-        await this.loadTransactions()
-      } catch (error) {
-        this.alertNotify('error', error.response?.data?.message || 'Failed to check status')
-      }
+
+    goToCredentials() {
+      this.$router.push("/safaricom-mobile-money-overview/credential")
     },
+
+    goToTransactions() {
+      this.$router.push("/safaricom-mobile-money-overview/transactions")
+    },
+
     getStatusClass(status) {
-      const classes = {
-        initiated: 'badge badge-info',
-        pending: 'badge badge-warning',
-        succeeded: 'badge badge-success',
-        failed: 'badge badge-danger'
+      switch (status) {
+        case 0:
+          return "md-warning"
+        case 1:
+        case 2:
+          return "md-success"
+        case -1:
+          return "md-error"
+        case 3:
+          return "md-info"
+        default:
+          return "md-default"
       }
-      return classes[status] || 'badge badge-secondary'
     },
-    formatDate(date) {
-      return moment(date).format('YYYY-MM-DD HH:mm:ss')
-    }
+    getStatusText(status) {
+      switch (status) {
+        case 0:
+          return "Requested"
+        case 1:
+          return "Success"
+        case 2:
+          return "Completed"
+        case -1:
+          return "Failed"
+        case 3:
+          return "Abandoned"
+        default:
+          return "Unknown"
+      }
+    },
+    formatAmount(amount, currency) {
+      try {
+        return new Intl.NumberFormat("en-KE", {
+          style: "currency",
+          currency: currency || "KES",
+        }).format(amount)
+      } catch (error) {
+        return `${currency || "KES"} ${amount}`
+      }
+    },
+    formatDate(dateString) {
+      if (!dateString) return "—"
+      return new Date(dateString).toLocaleString()
+    },
   },
-  mounted() {
-    this.loadSettings()
-    this.loadTransactions()
-  }
 }
 </script>
 
 <style scoped lang="scss">
-.safaricom-mobile-money {
-  padding: 20px;
+.overview-line {
+  margin-top: 1rem;
 }
-.badge {
-  padding: 5px 10px;
-  border-radius: 4px;
+
+.recent-card {
+  border-radius: 10px;
 }
-</style> 
+
+.recent-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.recent-card__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: $brand-primary-dark;
+}
+
+.recent-card__view-all {
+  margin: 0;
+}
+
+.recent-card__row {
+  cursor: pointer;
+}
+
+.setup-prompt {
+  border-radius: 10px;
+}
+
+.setup-prompt__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.setup-prompt__icon {
+  flex-shrink: 0;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  color: $brand-secondary-dark !important;
+  font-size: 24px !important;
+}
+
+.setup-prompt__text-block {
+  flex: 1 1 0;
+  min-width: 220px;
+}
+
+.setup-prompt__title {
+  margin: 0 0 0.2rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: $brand-primary-dark;
+}
+
+.setup-prompt__text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.setup-prompt__cta {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+// Vue Material's md-chip only themes md-primary / md-accent by default;
+// our status modifier classes need explicit colours so the pills don't
+// fall through to grey.
+::v-deep .safaricom-status-chip.md-error {
+  background-color: #d9534f !important;
+  color: #fff !important;
+}
+::v-deep .safaricom-status-chip.md-success {
+  background-color: #5cb85c !important;
+  color: #fff !important;
+}
+::v-deep .safaricom-status-chip.md-warning {
+  background-color: #f0ad4e !important;
+  color: #fff !important;
+}
+::v-deep .safaricom-status-chip.md-info {
+  background-color: #5bc0de !important;
+  color: #fff !important;
+}
+</style>

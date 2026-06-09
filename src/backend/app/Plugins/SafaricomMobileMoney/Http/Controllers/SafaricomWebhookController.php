@@ -1,10 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Plugins\SafaricomMobileMoney\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Plugins\SafaricomMobileMoney\Models\SafaricomTransaction;
 use App\Plugins\SafaricomMobileMoney\Services\SafaricomTransactionService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Log;
 
 class SafaricomWebhookController extends Controller {
     public function __construct(
@@ -12,85 +17,111 @@ class SafaricomWebhookController extends Controller {
     ) {}
 
     /**
-     * Handle STK Push result callback.
+     * Daraja STK Push result callback.
      *
-     * @param Request $request
-     *
-     * @return \Illuminate\Http\JsonResponse
+     * Daraja payload shape:
+     *   Body.stkCallback.MerchantRequestID
+     *   Body.stkCallback.CheckoutRequestID
+     *   Body.stkCallback.ResultCode  (0 = success, anything else = failure)
+     *   Body.stkCallback.ResultDesc
+     *   Body.stkCallback.CallbackMetadata.Item[] (only present on success)
      */
-    public function handleSTKPushResult(Request $request) {
-        try {
-            $data = $request->all();
+    public function handleSTKPushResult(Request $request, ?int $companyId = null): JsonResponse {
+        $companyId ??= (int) $request->attributes->get('companyId');
+        $payload = $request->all();
 
-            // Validate the callback data
-            if (!isset($data['Body']['stkCallback'])) {
-                return response()->json(['message' => 'Invalid callback data'], 400);
-            }
+        $stkCallback = $payload['Body']['stkCallback'] ?? null;
+        if (!is_array($stkCallback)) {
+            Log::warning('Safaricom STK callback malformed', ['payload' => $payload]);
 
-            $callbackData = $data['Body']['stkCallback'];
-            $result = $callbackData['ResultDesc'];
-            $resultCode = $callbackData['ResultCode'];
-
-            // Extract transaction details
-            $transactionData = [
-                'ResultCode' => $resultCode,
-                'ResultDesc' => $result,
-                'AccountReference' => $callbackData['MerchantRequestID'] ?? null,
-                'MpesaReceiptNumber' => $callbackData['CallbackMetadata']['Item'][1]['Value'] ?? null,
-                'TransactionDate' => $callbackData['CallbackMetadata']['Item'][3]['Value'] ?? null,
-            ];
-
-            $this->transactionService->updateTransactionStatus($transactionData);
-
-            return response()->json(['message' => 'Callback processed successfully']);
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 500);
+            return $this->ack();
         }
+
+        $checkoutRequestId = (string) ($stkCallback['CheckoutRequestID'] ?? '');
+        $transaction = $checkoutRequestId !== ''
+            ? $this->transactionService->getByCheckoutRequestId($checkoutRequestId)
+            : null;
+
+        if (!$transaction instanceof SafaricomTransaction) {
+            Log::warning('Safaricom STK callback for unknown CheckoutRequestID', [
+                'checkout_request_id' => $checkoutRequestId,
+            ]);
+
+            return $this->ack();
+        }
+
+        $resultCode = (int) ($stkCallback['ResultCode'] ?? -1);
+        $applyPayload = [
+            'result_desc' => $stkCallback['ResultDesc'] ?? null,
+            'result_code' => $resultCode,
+            'mpesa_receipt' => $this->extractCallbackItem($stkCallback, 'MpesaReceiptNumber'),
+            'transaction_date' => $this->normaliseTransactionDate(
+                $this->extractCallbackItem($stkCallback, 'TransactionDate'),
+            ),
+            'phone_number' => $this->extractCallbackItem($stkCallback, 'PhoneNumber'),
+            'amount' => $this->extractCallbackItem($stkCallback, 'Amount'),
+        ];
+
+        $this->transactionService->applyResultCode($transaction, $resultCode, $applyPayload, $companyId);
+
+        return $this->ack();
     }
 
     /**
-     * Handle validation callback.
-     *
-     * @param Request $request
-     *
-     * @return \Illuminate\Http\JsonResponse
+     * C2B validation handshake. Daraja's docs require a `{ResultCode: 0}`
+     * response for the payment to proceed. We don't do any per-payment
+     * validation here — that's already enforced by the public payment form
+     * before STK Push is even fired.
      */
-    public function handleValidation(Request $request) {
-        // For validation, we just need to acknowledge receipt
-        return response()->json([
-            'ResultCode' => 0,
-            'ResultDesc' => 'Success',
-        ]);
+    public function handleValidation(): JsonResponse {
+        return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Success']);
     }
 
     /**
-     * Handle confirmation callback.
-     *
-     * @param Request $request
-     *
-     * @return \Illuminate\Http\JsonResponse
+     * C2B confirmation — when a customer pays into the paybill/till directly
+     * (no STK Push). Recorded for audit; not currently mapped onto an
+     * MPM transaction since there's no order context.
      */
-    public function handleConfirmation(Request $request) {
-        try {
-            $data = $request->all();
+    public function handleConfirmation(Request $request): JsonResponse {
+        Log::info('Safaricom C2B confirmation received', $request->all());
 
-            // Validate the callback data
-            if (!isset($data['TransID'])) {
-                return response()->json(['message' => 'Invalid callback data'], 400);
-            }
+        return $this->ack();
+    }
 
-            $transactionData = [
-                'ResultCode' => 0, // Assuming success if we receive confirmation
-                'AccountReference' => $data['BillRefNumber'] ?? null,
-                'MpesaReceiptNumber' => $data['TransID'] ?? null,
-                'TransactionDate' => $data['TransTime'] ?? null,
-            ];
+    private function ack(): JsonResponse {
+        return response()->json(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
+    }
 
-            $this->transactionService->updateTransactionStatus($transactionData);
-
-            return response()->json(['message' => 'Confirmation processed successfully']);
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 500);
+    /**
+     * @param array<string, mixed> $stkCallback
+     */
+    private function extractCallbackItem(array $stkCallback, string $name): mixed {
+        $items = $stkCallback['CallbackMetadata']['Item'] ?? [];
+        if (!is_array($items)) {
+            return null;
         }
+        foreach ($items as $item) {
+            if (is_array($item) && ($item['Name'] ?? null) === $name) {
+                return $item['Value'] ?? null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Daraja sends transaction dates as `YYYYMMDDHHmmss` integers.
+     */
+    private function normaliseTransactionDate(mixed $raw): ?string {
+        if (!is_string($raw) && !is_int($raw)) {
+            return null;
+        }
+        $str = (string) $raw;
+        if (preg_match('/^\d{14}$/', $str) !== 1) {
+            return null;
+        }
+
+        return substr($str, 0, 4).'-'.substr($str, 4, 2).'-'.substr($str, 6, 2)
+            .' '.substr($str, 8, 2).':'.substr($str, 10, 2).':'.substr($str, 12, 2);
     }
 }

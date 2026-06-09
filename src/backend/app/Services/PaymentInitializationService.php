@@ -8,6 +8,7 @@ use App\Models\MpmPlugin;
 use App\Models\Plugins;
 use App\Models\Transaction\Transaction;
 use App\Plugins\PaystackPaymentProvider\Services\PaystackTransactionService;
+use App\Plugins\SafaricomMobileMoney\Services\SafaricomTransactionService;
 use App\Services\Interfaces\PaymentInitializer;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\Collection;
@@ -22,6 +23,7 @@ class PaymentInitializationService {
     private const PROVIDER_MAP = [
         0 => CashTransactionService::class,
         MpmPlugin::PAYSTACK_PAYMENT_PROVIDER => PaystackTransactionService::class,
+        MpmPlugin::SAFARICOM_MOBILE_MONEY => SafaricomTransactionService::class,
     ];
 
     public function __construct(

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use App\Plugins\SafaricomMobileMoney\Models\SafaricomTransaction;
 use App\Plugins\SafaricomMobileMoney\Services\SafaricomTransactionService;
-use MPM\Transaction\Provider\ITransactionProvider;
+use App\Providers\Interfaces\ITransactionProvider;
 
 class SafaricomMobileMoneyTransactionProvider implements ITransactionProvider {
     private array $validData = [];
