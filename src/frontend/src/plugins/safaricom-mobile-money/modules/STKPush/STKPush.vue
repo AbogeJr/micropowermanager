@@ -69,8 +69,9 @@
 </template>
 
 <script>
-import { mapState } from 'vuex' 
-import { notify } from "@/mixins/notify"
+import { mapState } from 'vuex'
+ 
+import { notify } from "@/mixins/notify.js"
 
 export default {
   name: 'SafaricomSTKPush',
@@ -140,7 +141,7 @@ export default {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .stk-push {
   padding: 20px;
 }

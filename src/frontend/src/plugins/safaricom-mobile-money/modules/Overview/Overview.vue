@@ -106,9 +106,10 @@
 </template>
 
 <script>
-import { mapState } from 'vuex'
 import moment from 'moment'
-import { notify } from "@/mixins/notify"
+import { mapState } from 'vuex'
+
+import { notify } from "@/mixins/notify.js"
 
 export default {
   name: 'SafaricomMobileMoneyOverview',
@@ -133,7 +134,7 @@ export default {
   methods: {
     async saveSettings() {
       try {
-        const response = await this.$http.post(
+        await this.$http.post(
           `${this.baseUrl}/safaricom/settings`,
           this.settings
         )
@@ -189,7 +190,7 @@ export default {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .safaricom-mobile-money {
   padding: 20px;
 }

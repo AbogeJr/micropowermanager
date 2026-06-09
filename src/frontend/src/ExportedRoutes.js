@@ -77,6 +77,8 @@ import PaystackPublicResult from "@/plugins/paystack-payment-provider/modules/Pa
 import PaystackTransaction from "@/plugins/paystack-payment-provider/modules/Transaction/Transaction.vue"
 import ProspectOverview from "@/plugins/prospect/modules/Overview/Overview.vue"
 import ProspectSettings from "@/plugins/prospect/modules/Setting/Setting.vue"
+import SafaricomMobileMoneyOverview from "@/plugins/safaricom-mobile-money/modules/Overview/Overview.vue"
+import SafaricomMobileMoneySTKPush from "@/plugins/safaricom-mobile-money/modules/STKPush/STKPush.vue"
 import SmsTransactionParserMessages from "@/plugins/sms-transaction-parser/modules/Messages/Messages.vue"
 import SmsTransactionParserOverview from "@/plugins/sms-transaction-parser/modules/Overview/Overview.vue"
 import SparkMeterCustomerList from "@/plugins/spark-meter/modules/Customer/CustomerList.vue"
@@ -104,8 +106,6 @@ import ViberMessagingOverview from "@/plugins/viber-messaging/modules/Overview/O
 import WaveMoneyOverview from "@/plugins/wave-money-payment-provider/modules/Overview/Overview.vue"
 import WaveMoneyPayment from "@/plugins/wave-money-payment-provider/modules/Payment/Payment.vue"
 import WaveMoneyResult from "@/plugins/wave-money-payment-provider/modules/Payment/Result.vue"
-import SafaricomMobileMoneyOverview from "@/plugins/safaricom-mobile-money/modules/Overview/Overview.vue"
-import SafaricomMobileMoneySTKPush from "@/plugins/safaricom-mobile-money/modules/STKPush/STKPush.vue"
 import WavecomTransactionUpload from "@/plugins/wavecom-payment-provider/modules/Component.vue"
 
 export const exportedRoutes = [
