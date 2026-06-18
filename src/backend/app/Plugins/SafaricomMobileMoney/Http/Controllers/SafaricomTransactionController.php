@@ -35,20 +35,65 @@ class SafaricomTransactionController extends Controller {
         return SafaricomTransactionResource::make($transaction);
     }
 
+    /**
+     * Validate a device serial + type (meter or shs) for the operator-facing
+     * STK Push page. Mirrors PaystackPublicController::validateMeter so the
+     * frontend has one consistent validation shape across providers.
+     */
+    public function validateDevice(Request $request): JsonResponse {
+        $request->validate([
+            'device_serial' => 'required|string|min:3|max:100',
+            'device_type' => 'nullable|string|in:meter,shs',
+        ]);
+        $deviceSerial = (string) $request->input('device_serial');
+        $deviceType = (string) ($request->input('device_type') ?? 'meter');
+
+        $isValid = $this->transactionService->validateDeviceSerial($deviceSerial, $deviceType);
+        $customerId = $isValid
+            ? $this->transactionService->getCustomerIdByDeviceSerial($deviceSerial, $deviceType)
+            : null;
+
+        return response()->json([
+            'valid' => $isValid,
+            'device_serial' => $deviceSerial,
+            'device_type' => $deviceType,
+            'customer_id' => $customerId,
+        ]);
+    }
+
     public function initiateStkPush(SafaricomSTKPushRequest $request): JsonResponse {
         $data = $request->validated();
-        $customerId = (int) ($data['customer_id'] ?? 0);
         $serialId = $data['device_serial'] ?? ($data['serial_id'] ?? null);
+        $deviceType = (string) ($data['device_type'] ?? 'meter');
+
+        // For the operator-facing STK Push flow the device serial is the
+        // primary key — we derive the customer from it rather than asking the
+        // operator to know the customer ID. Reject early if the serial
+        // doesn't match a registered device on this tenant.
+        if (!$serialId || !$this->transactionService->validateDeviceSerial((string) $serialId, $deviceType)) {
+            return response()->json([
+                'error' => 'Unknown device serial — pick a registered meter or SHS.',
+            ], 422);
+        }
+
+        $customerId = $this->transactionService->getCustomerIdByDeviceSerial((string) $serialId, $deviceType);
+        if ($customerId === null) {
+            return response()->json([
+                'error' => 'No customer is linked to that device — assign one before charging.',
+            ], 422);
+        }
 
         try {
             $result = $this->transactionService->initializePayment(
                 amount: (float) $data['amount'],
                 sender: (string) $data['phone_number'],
-                message: (string) ($data['account_reference'] ?? $serialId ?? 'Payment'),
+                message: (string) ($data['transaction_desc'] ?? $data['account_reference'] ?? $serialId),
                 type: (string) ($data['type'] ?? 'energy'),
                 customerId: $customerId,
                 serialId: $serialId,
             );
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
         } catch (\Throwable $e) {
             return response()->json(['error' => $e->getMessage()], 422);
         }
@@ -60,6 +105,35 @@ class SafaricomTransactionController extends Controller {
                 'merchant_request_id' => $result['provider_data']['merchant_request_id'],
                 'customer_message' => $result['provider_data']['customer_message'],
             ],
+        ]);
+    }
+
+    /**
+     * Polled by the STK Push page while the customer is entering their PIN.
+     * For pending transactions this hits Daraja's STK Push Query so we don't
+     * have to wait for the (frequently delayed) async callback. Once the
+     * transaction is resolved (success/failure/abandoned) further calls are
+     * cheap — they short-circuit on the cached terminal status.
+     */
+    public function getStatus(Request $request, string $referenceId): JsonResponse {
+        $transaction = $this->transactionService->getByReferenceId($referenceId);
+        if (!$transaction instanceof SafaricomTransaction) {
+            return response()->json(['error' => 'Transaction not found'], 404);
+        }
+
+        $companyId = (int) $request->attributes->get('companyId');
+        $snapshot = $this->transactionService->queryStatus($transaction, $companyId);
+        $transaction->refresh();
+
+        return response()->json([
+            'data' => array_merge($snapshot, [
+                'reference_id' => $transaction->getReferenceId(),
+                'phone_number' => $transaction->getPhoneNumber(),
+                'amount' => $transaction->getAmount(),
+                'currency' => $transaction->getCurrency(),
+                'mpesa_receipt_number' => $transaction->getMpesaReceiptNumber(),
+                'transaction_date' => $transaction->transaction_date,
+            ]),
         ]);
     }
 }

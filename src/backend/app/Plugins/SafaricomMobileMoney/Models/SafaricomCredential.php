@@ -51,6 +51,39 @@ class SafaricomCredential extends BaseModel {
         return $this->shortcode ?? '';
     }
 
+    /**
+     * Shortcode used for actual Daraja calls. Falls back to the well-known
+     * sandbox shortcode (174379) when the operator left it blank in sandbox
+     * mode, so they don't have to provide one just to run a test transaction.
+     * Production must always carry an explicit shortcode.
+     */
+    public function getEffectiveShortcode(): string {
+        $stored = $this->getShortcode();
+        if ($stored !== '') {
+            return $stored;
+        }
+
+        return $this->isSandbox()
+            ? (string) config('safaricom-mobile-money.sandbox.shortcode', '174379')
+            : '';
+    }
+
+    /**
+     * Passkey used for actual Daraja calls. Mirrors getEffectiveShortcode:
+     * sandbox falls back to the public LNM test passkey, production must
+     * always carry an explicit one.
+     */
+    public function getEffectivePasskey(): string {
+        $stored = $this->getPasskey();
+        if ($stored !== '') {
+            return $stored;
+        }
+
+        return $this->isSandbox()
+            ? (string) config('safaricom-mobile-money.sandbox.passkey', '')
+            : '';
+    }
+
     public function getEnvironment(): string {
         return $this->environment ?? 'sandbox';
     }

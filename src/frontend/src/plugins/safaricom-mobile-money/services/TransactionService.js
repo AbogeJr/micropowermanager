@@ -42,4 +42,26 @@ export class TransactionService {
       throw error
     }
   }
+
+  async getStatus(referenceId) {
+    try {
+      return await Client.get(`${resource}/transaction/${referenceId}/status`)
+    } catch (error) {
+      console.error("Error fetching STK Push status:", error)
+      throw error
+    }
+  }
+
+  async validateDevice(deviceSerial, deviceType) {
+    try {
+      const response = await Client.post(`${resource}/validate-device`, {
+        device_serial: deviceSerial,
+        device_type: deviceType,
+      })
+      return response.data
+    } catch (error) {
+      console.error("Error validating device:", error)
+      throw error
+    }
+  }
 }

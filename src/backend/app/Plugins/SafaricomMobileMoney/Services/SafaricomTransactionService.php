@@ -141,8 +141,8 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
     /**
      * Initiate an STK Push for `$sender` (the customer's phone number).
      * Creates a SafaricomTransaction + core Transaction in one DB transaction,
-     * then issues the STK Push so PesaPal-style atomicity holds even when
-     * Daraja errors out (we don't end up with orphaned transaction rows).
+     * then issues the STK Push so we don't end up with orphaned transaction
+     * rows when Daraja errors out synchronously.
      *
      * @return array{transaction: Transaction, provider_data: array<string, mixed>}
      */
@@ -162,6 +162,22 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
 
         $credential = $this->credentialService->getCredentials();
 
+        // Normalise here so we store and send the canonical 2547XXXXXXXX form
+        // — Daraja rejects 07.../+254... formats outright.
+        $normalisedPhone = $this->normalisePhoneNumber($sender);
+        if ($normalisedPhone === null) {
+            throw new \InvalidArgumentException(
+                'Phone number must be a Kenyan M-PESA number (e.g. 0712345678 or 254712345678).',
+            );
+        }
+
+        // Daraja caps AccountReference to 12 chars and TransactionDesc to 13.
+        // The customer sees AccountReference in the STK PIN prompt, so prefer
+        // the meter serial; fall back to the short prefix of our reference_id.
+        $referenceId = Uuid::uuid4()->toString();
+        $accountReference = $this->truncate($serialId ?: substr($referenceId, 0, 8), 12);
+        $transactionDesc = $this->truncate($message ?: 'MPM Payment', 13);
+
         try {
             DB::connection('tenant')->beginTransaction();
 
@@ -170,14 +186,14 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
                 'amount' => $amount,
                 'currency' => 'KES',
                 'order_id' => Uuid::uuid4()->toString(),
-                'reference_id' => Uuid::uuid4()->toString(),
+                'reference_id' => $referenceId,
                 'status' => SafaricomTransaction::STATUS_REQUESTED,
                 'customer_id' => $customerId,
                 'serial_id' => $serialId,
                 'device_type' => $deviceType,
-                'phone_number' => $sender,
-                'account_reference' => $serialId,
-                'transaction_desc' => $message ?: 'MPM Payment',
+                'phone_number' => $normalisedPhone,
+                'account_reference' => $accountReference,
+                'transaction_desc' => $transactionDesc,
                 'metadata' => [
                     'customer_id' => $customerId,
                     'serial_id' => $serialId,
@@ -188,7 +204,7 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
             /** @var Transaction $transaction */
             $transaction = $safaricomTxn->transaction()->create([
                 'amount' => $amount,
-                'sender' => $sender,
+                'sender' => $normalisedPhone,
                 'message' => $message,
                 'type' => $type,
             ]);
@@ -220,11 +236,22 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
     }
 
     /**
-     * Apply a Safaricom result code to a transaction.
-     * Used by both the STK Push result webhook and the C2B confirmation
-     * webhook so failed/cancelled payments never leave a transaction stuck
-     * in REQUESTED. Driven server-side; we never trust the inbound payload
-     * blindly.
+     * Apply a Daraja result code to a transaction. Drives both the STK Push
+     * result webhook and the STK Push Query polling path so failed/cancelled
+     * payments don't leave a transaction stuck in REQUESTED. Server-side
+     * authoritative — we never trust the inbound payload's status fields
+     * directly.
+     *
+     * Daraja result-code semantics (https://developer.safaricom.co.ke):
+     *   0    = success
+     *   1    = insufficient funds
+     *   1001 = subscriber lock (another tx in progress)
+     *   1019 = transaction expired
+     *   1025 = push request error
+     *   1032 = user cancelled
+     *   1037 = phone unreachable / DS timeout
+     *   2001 = invalid PIN
+     *   9999 = general error
      *
      * @param array<string, mixed> $payload
      */
@@ -237,14 +264,175 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
             $transaction->transaction_date = $payload['transaction_date'];
         }
         $existingResponse = $transaction->response_data ?? [];
-        $transaction->response_data = array_merge(is_array($existingResponse) ? $existingResponse : [], $payload);
+        $transaction->response_data = array_merge(
+            is_array($existingResponse) ? $existingResponse : [],
+            $payload,
+            ['final_result_code' => $resultCode],
+        );
         $transaction->save();
 
-        match ($resultCode) {
-            0 => $this->processSuccessfulPayment($companyId, $transaction),
-            // 1032 = user cancelled, 1037 = timeout, 1 = insufficient funds, etc.
+        // 1032 = user cancelled is conceptually "abandoned", not a hard
+        // failure. Everything else non-zero is a failure.
+        match (true) {
+            $resultCode === 0 => $this->processSuccessfulPayment($companyId, $transaction),
+            $resultCode === 1032 => $this->markAbandoned($transaction),
             default => $this->processFailedPayment($transaction),
         };
+    }
+
+    private function markAbandoned(SafaricomTransaction $transaction): void {
+        $transaction->setStatus(SafaricomTransaction::STATUS_ABANDONED);
+        $transaction->save();
+    }
+
+    /**
+     * Poll Daraja's STK Push Query endpoint for the current status of a
+     * pending transaction. Callbacks can be delayed or missed; this is the
+     * source of truth the operator-facing payment page polls while showing
+     * "Check your phone".
+     *
+     * Returns the merged status payload (same shape as the callback path
+     * would have produced). When Daraja reports a terminal result code we
+     * apply it through applyResultCode so the transaction state and the
+     * polled view stay consistent.
+     *
+     * @return array{
+     *   resolved: bool,
+     *   result_code: ?int,
+     *   result_desc: ?string,
+     *   transaction_status: int,
+     *   mpesa_receipt: ?string,
+     *   error: ?string,
+     * }
+     */
+    public function queryStatus(SafaricomTransaction $transaction, int $companyId): array {
+        $checkoutRequestId = $transaction->getCheckoutRequestId();
+        if ($checkoutRequestId === null || $checkoutRequestId === '') {
+            return $this->statusSnapshot($transaction, null, 'Missing CheckoutRequestID');
+        }
+
+        // If we already concluded the transaction (via webhook or a previous
+        // query), short-circuit — Daraja's query will eventually return
+        // "transaction not found" once it ages out.
+        if (in_array($transaction->getStatus(), [
+            SafaricomTransaction::STATUS_SUCCESS,
+            SafaricomTransaction::STATUS_COMPLETED,
+            SafaricomTransaction::STATUS_FAILED,
+            SafaricomTransaction::STATUS_ABANDONED,
+        ], true)) {
+            return $this->statusSnapshot($transaction);
+        }
+
+        $credential = $this->credentialService->getCredentials();
+        $shortcode = $credential->getEffectiveShortcode();
+        $passkey = $credential->getEffectivePasskey();
+        if ($shortcode === '' || $passkey === '') {
+            return $this->statusSnapshot($transaction, null, 'Shortcode/passkey not configured');
+        }
+
+        $timestamp = date('YmdHis');
+        $payload = [
+            'BusinessShortCode' => $shortcode,
+            'Password' => base64_encode($shortcode.$passkey.$timestamp),
+            'Timestamp' => $timestamp,
+            'CheckoutRequestID' => $checkoutRequestId,
+        ];
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer '.$this->authService->getAccessToken(),
+                'Content-Type' => 'application/json',
+            ])->post($this->stkPushQueryUrl($credential), $payload);
+        } catch (\Throwable $e) {
+            Log::warning('Safaricom STK Push Query exception', [
+                'checkout_request_id' => $checkoutRequestId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->statusSnapshot($transaction, null, $e->getMessage());
+        }
+
+        $body = $response->json();
+        if (!is_array($body)) {
+            return $this->statusSnapshot(
+                $transaction,
+                null,
+                'Daraja returned non-JSON for STK Push Query: '.$response->body(),
+            );
+        }
+
+        // Daraja returns one of three shapes:
+        //   - Pending (no terminal outcome yet): errorCode/errorMessage like
+        //     "500.001.1001 — The transaction is being processed".
+        //   - Resolved: ResponseCode/ResultCode/ResultDesc all populated.
+        //   - Not found (after TTL): different errorMessage.
+        if (!isset($body['ResultCode'])) {
+            $errorMessage = $body['errorMessage'] ?? null;
+            // The "still processing" error is a Daraja idiom, not a real failure.
+            $isStillProcessing = is_string($errorMessage)
+                && (str_contains($errorMessage, 'being processed')
+                    || ($body['errorCode'] ?? '') === '500.001.1001');
+            if ($isStillProcessing) {
+                return $this->statusSnapshot($transaction);
+            }
+
+            return $this->statusSnapshot($transaction, null, $errorMessage);
+        }
+
+        $resultCode = (int) $body['ResultCode'];
+
+        // 4999 is an undocumented transient Daraja sometimes returns from the
+        // STK Push Query while the customer is still being prompted on their
+        // handset. It is NOT a terminal outcome — treat it the same as the
+        // "being processed" branch above and keep polling. If the customer
+        // ultimately fails to act, the frontend's poll timeout (~60s) gives
+        // up with the "Stopped Waiting" message, which is the right UX
+        // rather than spuriously marking the transaction FAILED.
+        if ($resultCode === 4999) {
+            return $this->statusSnapshot($transaction);
+        }
+
+        $this->applyResultCode($transaction, $resultCode, [
+            'source' => 'query',
+            'result_code' => $resultCode,
+            'result_desc' => $body['ResultDesc'] ?? null,
+            'raw_query_response' => $body,
+        ], $companyId);
+        $transaction->refresh();
+
+        return $this->statusSnapshot($transaction, $resultCode);
+    }
+
+    /**
+     * @return array{
+     *   resolved: bool,
+     *   result_code: ?int,
+     *   result_desc: ?string,
+     *   transaction_status: int,
+     *   mpesa_receipt: ?string,
+     *   error: ?string,
+     * }
+     */
+    private function statusSnapshot(SafaricomTransaction $transaction, ?int $resultCode = null, ?string $error = null): array {
+        $status = $transaction->getStatus();
+        $resolved = in_array($status, [
+            SafaricomTransaction::STATUS_SUCCESS,
+            SafaricomTransaction::STATUS_COMPLETED,
+            SafaricomTransaction::STATUS_FAILED,
+            SafaricomTransaction::STATUS_ABANDONED,
+        ], true);
+        $responseData = $transaction->response_data ?? [];
+        $resolvedResultCode = $resultCode
+            ?? (isset($responseData['final_result_code']) ? (int) $responseData['final_result_code'] : null);
+
+        return [
+            'resolved' => $resolved,
+            'result_code' => $resolvedResultCode,
+            'result_desc' => $responseData['result_desc'] ?? null,
+            'transaction_status' => $status,
+            'mpesa_receipt' => $transaction->getMpesaReceiptNumber(),
+            'error' => $error,
+        ];
     }
 
     /**
@@ -252,11 +440,25 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
      */
     private function sendStkPush(SafaricomTransaction $transaction, \App\Plugins\SafaricomMobileMoney\Models\SafaricomCredential $credential): array {
         $timestamp = date('YmdHis');
-        $shortcode = $credential->getShortcode();
-        $password = base64_encode($shortcode.$credential->getPasskey().$timestamp);
+        $shortcode = $credential->getEffectiveShortcode();
+        $passkey = $credential->getEffectivePasskey();
+
+        if ($shortcode === '' || $passkey === '') {
+            return [
+                'checkout_request_id' => null,
+                'merchant_request_id' => null,
+                'customer_message' => null,
+                'raw' => [],
+                'error' => 'Shortcode and passkey are required for production. Save them on the credentials page.',
+            ];
+        }
+
+        $password = base64_encode($shortcode.$passkey.$timestamp);
 
         $callbackUrl = $credential->getResultUrl() ?: $this->buildDefaultResultUrl();
 
+        // account_reference + transaction_desc were already truncated to the
+        // Daraja-enforced 12/13 char limits during transaction creation.
         $payload = [
             'BusinessShortCode' => $shortcode,
             'Password' => $password,
@@ -267,7 +469,7 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
             'PartyB' => $shortcode,
             'PhoneNumber' => $transaction->getPhoneNumber(),
             'CallBackURL' => $callbackUrl,
-            'AccountReference' => $transaction->getDeviceSerial() ?: $transaction->getReferenceId(),
+            'AccountReference' => $transaction->account_reference ?: substr($transaction->getReferenceId(), 0, 8),
             'TransactionDesc' => $transaction->transaction_desc ?: 'MPM Payment',
         ];
 
@@ -277,8 +479,12 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
                 'Content-Type' => 'application/json',
             ])->post($this->stkPushUrl($credential), $payload);
         } catch (\Throwable $e) {
+            // Auth exceptions surface here (token endpoint failed). The
+            // message is already operator-friendly from SafaricomAuthService.
             Log::error('Safaricom STK Push exception', [
                 'reference_id' => $transaction->getReferenceId(),
+                'shortcode' => $shortcode,
+                'phone' => $transaction->getPhoneNumber(),
                 'error' => $e->getMessage(),
             ]);
 
@@ -293,12 +499,32 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
 
         $body = $response->json();
         if (!$response->successful() || !is_array($body)) {
+            $bodyExcerpt = substr($response->body(), 0, 500);
+            Log::error('Safaricom STK Push rejected by Daraja', [
+                'reference_id' => $transaction->getReferenceId(),
+                'shortcode' => $shortcode,
+                'status' => $response->status(),
+                'body_excerpt' => $bodyExcerpt,
+            ]);
+
+            // Same "no HTML in the toast" rule as the OAuth path.
+            $status = $response->status();
+            $darajaErrorMessage = is_array($body) ? ($body['errorMessage'] ?? null) : null;
+            $reason = match (true) {
+                $darajaErrorMessage !== null => 'Daraja: '.$darajaErrorMessage,
+                $status === 400 => 'Daraja rejected the STK Push payload (HTTP 400). Most often this is an unregistered BusinessShortCode for the environment.',
+                $status === 401 => 'Daraja rejected the access token. Re-save credentials.',
+                $status === 404 => 'Daraja said the STK Push endpoint was not found (HTTP 404).',
+                $status >= 500 => "Daraja's STK Push gateway returned {$status} — try again in a moment.",
+                default => "Daraja returned HTTP {$status}.",
+            };
+
             return [
                 'checkout_request_id' => null,
                 'merchant_request_id' => null,
                 'customer_message' => null,
-                'raw' => is_array($body) ? $body : ['raw' => $response->body()],
-                'error' => 'Daraja returned HTTP '.$response->status().': '.$response->body(),
+                'raw' => is_array($body) ? $body : ['raw' => $bodyExcerpt],
+                'error' => $reason,
             ];
         }
 
@@ -325,11 +551,17 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
     }
 
     private function stkPushUrl(\App\Plugins\SafaricomMobileMoney\Models\SafaricomCredential $credential): string {
-        $base = $credential->isProduction()
+        return $this->darajaBaseUrl($credential).'/mpesa/stkpush/v1/processrequest';
+    }
+
+    private function stkPushQueryUrl(\App\Plugins\SafaricomMobileMoney\Models\SafaricomCredential $credential): string {
+        return $this->darajaBaseUrl($credential).'/mpesa/stkpushquery/v1/query';
+    }
+
+    private function darajaBaseUrl(\App\Plugins\SafaricomMobileMoney\Models\SafaricomCredential $credential): string {
+        return $credential->isProduction()
             ? (string) config('safaricom-mobile-money.api.production_url', 'https://api.safaricom.co.ke')
             : (string) config('safaricom-mobile-money.api.sandbox_url', 'https://sandbox.safaricom.co.ke');
-
-        return $base.'/mpesa/stkpush/v1/processrequest';
     }
 
     private function buildDefaultResultUrl(): string {
@@ -340,6 +572,47 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
         }
 
         return $appUrl.'/api/safaricom/webhook/stk-push-result/'.$companyId;
+    }
+
+    /**
+     * Accept the four common formats operators type and return the
+     * Daraja-canonical 2547XXXXXXXX. Anything else is invalid.
+     *
+     *   254712345678  -> 254712345678
+     *   +254712345678 -> 254712345678
+     *   0712345678    -> 254712345678
+     *   712345678     -> 254712345678
+     *
+     * Whitespace and hyphens are ignored. Only Safaricom (07XX, 011X) and
+     * other prefixes that Daraja routes are accepted at the byte level; the
+     * actual MNP routing happens at Daraja's side.
+     */
+    public function normalisePhoneNumber(string $raw): ?string {
+        $digits = preg_replace('/[\s\-]+/', '', $raw) ?? $raw;
+        $digits = ltrim($digits, '+');
+
+        if (preg_match('/^254\d{9}$/', $digits) === 1) {
+            return $digits;
+        }
+        if (preg_match('/^0\d{9}$/', $digits) === 1) {
+            return '254'.substr($digits, 1);
+        }
+        if (preg_match('/^[17]\d{8}$/', $digits) === 1) {
+            return '254'.$digits;
+        }
+
+        return null;
+    }
+
+    private function truncate(string $value, int $max): string {
+        // Daraja rejects payloads where AccountReference > 12 or
+        // TransactionDesc > 13 chars; multibyte-safe truncation keeps us
+        // from accidentally chopping a UTF-8 sequence mid-byte.
+        if (function_exists('mb_substr')) {
+            return mb_substr($value, 0, $max);
+        }
+
+        return substr($value, 0, $max);
     }
 
     public function validateMeterSerial(string $serialId): bool {
@@ -354,6 +627,51 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
             ->newQuery()
             ->where('serial_number', $serialId)
             ->exists();
+    }
+
+    /**
+     * Single device-type-aware validation point used by the operator-facing
+     * STK Push page (mirrors PaystackTransactionService::validateDeviceSerial).
+     */
+    public function validateDeviceSerial(string $serialId, string $deviceType = 'meter'): bool {
+        if ($deviceType === 'shs') {
+            return $this->validateSHSSerial($serialId);
+        }
+
+        return $this->validateMeterSerial($serialId);
+    }
+
+    public function getCustomerIdByMeterSerial(string $serialId): ?int {
+        $meter = $this->meter->newQuery()
+            ->where('serial_number', $serialId)
+            ->where('in_use', 1)
+            ->first();
+        if (!$meter) {
+            return null;
+        }
+        $person = $meter->device?->person;
+
+        return $person ? (int) $person->id : null;
+    }
+
+    public function getCustomerIdBySHSSerial(string $serialId): ?int {
+        $shs = app()->make(SolarHomeSystem::class)
+            ->newQuery()
+            ->where('serial_number', $serialId)
+            ->first();
+        if (!$shs) {
+            return null;
+        }
+        $device = $shs->device()->first();
+        $person = $device?->person;
+
+        return $person ? (int) $person->id : null;
+    }
+
+    public function getCustomerIdByDeviceSerial(string $serialId, string $deviceType = 'meter'): ?int {
+        return $deviceType === 'shs'
+            ? $this->getCustomerIdBySHSSerial($serialId)
+            : $this->getCustomerIdByMeterSerial($serialId);
     }
 
     public function getCustomerPhoneByCustomerId(int $customerId): ?string {

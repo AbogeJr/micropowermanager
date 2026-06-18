@@ -151,6 +151,7 @@ export default {
         consumerSecretSet: false,
         passkeySet: false,
         shortcode: "",
+        environment: "sandbox",
       },
       stats: {
         totalTransactions: 0,
@@ -171,38 +172,55 @@ export default {
     EventBus.$off("credential-updated", this.onCredentialUpdated)
   },
   computed: {
-    hasSecrets() {
+    isSandbox() {
+      return this.credentials.environment === "sandbox"
+    },
+    // OAuth keys are mandatory in every environment — operators always have
+    // to register their own Daraja app to obtain them.
+    hasOauthKeys() {
       return (
-        this.credentials.consumerKeySet &&
-        this.credentials.consumerSecretSet &&
-        this.credentials.passkeySet
+        this.credentials.consumerKeySet && this.credentials.consumerSecretSet
+      )
+    },
+    // Shortcode/passkey only need to be supplied in production. Sandbox
+    // falls back to Daraja's published test values, so the plugin is
+    // "configured" once OAuth keys are in.
+    hasMerchantConfig() {
+      if (this.isSandbox) {
+        return true
+      }
+      return (
+        Boolean(this.credentials.shortcode) && this.credentials.passkeySet
       )
     },
     isFullyConfigured() {
-      return this.hasSecrets && Boolean(this.credentials.shortcode)
+      return this.hasOauthKeys && this.hasMerchantConfig
     },
     credentialStatus() {
-      if (!this.hasSecrets) {
+      if (!this.hasOauthKeys) {
         return { color: "red", text: "Not Configured" }
       }
-      if (!this.credentials.shortcode) {
-        return { color: "orange", text: "Shortcode Missing" }
+      if (!this.hasMerchantConfig) {
+        return { color: "orange", text: "Production Config Missing" }
       }
-      return { color: "green", text: "Configured" }
+      return {
+        color: "green",
+        text: this.isSandbox ? "Configured (Sandbox)" : "Configured",
+      }
     },
     setupPrompt() {
-      if (!this.hasSecrets) {
+      if (!this.hasOauthKeys) {
         return {
           title: "Finish setting up Safaricom M-PESA",
           description:
-            "Add your Daraja consumer key, consumer secret and passkey so customers can start paying.",
+            "Add your Daraja consumer key and consumer secret so customers can start paying.",
           cta: "Configure credentials",
         }
       }
       return {
-        title: "Shortcode missing",
+        title: "Production config missing",
         description:
-          "Credentials are saved but no shortcode is set. Add your Paybill or Till number so STK Push requests can route correctly.",
+          "Credentials are saved but production requires an explicit shortcode and passkey from your Daraja portal.",
         cta: "Open credentials",
       }
     },
@@ -242,6 +260,7 @@ export default {
             consumerSecretSet: Boolean(credential.consumerSecretSet),
             passkeySet: Boolean(credential.passkeySet),
             shortcode: credential.shortcode || "",
+            environment: credential.environment || "sandbox",
           }
         }
       } catch (error) {
@@ -251,6 +270,7 @@ export default {
           consumerSecretSet: false,
           passkeySet: false,
           shortcode: "",
+          environment: "sandbox",
         }
       }
     },

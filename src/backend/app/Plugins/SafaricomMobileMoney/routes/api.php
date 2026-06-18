@@ -12,6 +12,8 @@ Route::prefix('safaricom')->group(function () {
     Route::get('/transactions', [SafaricomTransactionController::class, 'getTransactions']);
     Route::get('/transactions/{id}', [SafaricomTransactionController::class, 'getTransaction']);
     Route::post('/stk-push', [SafaricomTransactionController::class, 'initiateStkPush']);
+    Route::post('/validate-device', [SafaricomTransactionController::class, 'validateDevice']);
+    Route::get('/transaction/{referenceId}/status', [SafaricomTransactionController::class, 'getStatus']);
 
     // Daraja webhook endpoints — companyId is in the URL so the ApiResolver
     // can pick the right tenant for unauthenticated callbacks.

@@ -102,11 +102,7 @@
                     v-model="credentialService.credential.passkey"
                     v-validate="passkeyRules"
                     type="password"
-                    :placeholder="
-                      credentialService.credential.passkeySet
-                        ? '••••••••  (leave blank to keep current)'
-                        : 'LNM passkey from Daraja'
-                    "
+                    :placeholder="passkeyPlaceholder"
                   />
                   <span class="md-error">
                     {{ errors.first("Credential-Form.passkey") }}
@@ -118,6 +114,14 @@
                 >
                   <md-icon>check_circle</md-icon>
                   Configured — leave blank to keep the current passkey.
+                </p>
+                <p
+                  v-else-if="isSandbox"
+                  class="field__note field__note--info"
+                >
+                  <md-icon>info</md-icon>
+                  Optional in sandbox — Daraja's public test passkey is used
+                  when blank.
                 </p>
               </div>
             </div>
@@ -136,13 +140,21 @@
                     id="shortcode"
                     name="shortcode"
                     v-model="credentialService.credential.shortcode"
-                    v-validate="'required|min:3'"
-                    placeholder="e.g. 174379"
+                    v-validate="shortcodeRules"
+                    :placeholder="shortcodePlaceholder"
                   />
                   <span class="md-error">
                     {{ errors.first("Credential-Form.shortcode") }}
                   </span>
                 </md-field>
+                <p
+                  v-if="isSandbox && !credentialService.credential.shortcode"
+                  class="field__note field__note--info"
+                >
+                  <md-icon>info</md-icon>
+                  Optional in sandbox — Daraja's test shortcode 174379 is
+                  used when blank.
+                </p>
               </div>
             </div>
 
@@ -258,6 +270,9 @@ export default {
     }
   },
   computed: {
+    isSandbox() {
+      return this.credentialService.credential.environment === "sandbox"
+    },
     consumerKeyRules() {
       return this.credentialService.credential.consumerKeySet
         ? "min:3"
@@ -269,9 +284,26 @@ export default {
         : "required|min:3"
     },
     passkeyRules() {
-      return this.credentialService.credential.passkeySet
-        ? "min:3"
-        : "required|min:3"
+      if (this.credentialService.credential.passkeySet) {
+        return "min:3"
+      }
+      // In sandbox the backend falls back to Daraja's test passkey, so this
+      // field is optional. Production requires it.
+      return this.isSandbox ? "min:3" : "required|min:3"
+    },
+    shortcodeRules() {
+      return this.isSandbox ? "min:3" : "required|min:3"
+    },
+    passkeyPlaceholder() {
+      if (this.credentialService.credential.passkeySet) {
+        return "••••••••  (leave blank to keep current)"
+      }
+      return this.isSandbox
+        ? "Optional in sandbox — uses Daraja test passkey when blank"
+        : "LNM passkey from Daraja"
+    },
+    shortcodePlaceholder() {
+      return this.isSandbox ? "e.g. 174379 (test default)" : "e.g. 600999"
     },
   },
   async mounted() {
@@ -379,6 +411,22 @@ export default {
 
   .md-icon {
     color: $brand-accent-dark !important;
+    font-size: 16px !important;
+    width: 16px;
+    min-width: 16px;
+    height: 16px;
+  }
+}
+
+.field__note--info {
+  color: $brand-primary;
+  font-style: normal;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  .md-icon {
+    color: $brand-primary !important;
     font-size: 16px !important;
     width: 16px;
     min-width: 16px;

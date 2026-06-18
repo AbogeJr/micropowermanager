@@ -20,14 +20,19 @@ class SafaricomCredentialController extends Controller {
     }
 
     public function update(Request $request): SafaricomCredentialResource {
-        // consumer_key / consumer_secret / passkey are optional on update: the
+        // consumer_key / consumer_secret / passkey are write-only: the
         // resource never returns the stored values, so the form re-submits
         // them blank unless the operator actually retypes them.
+        //
+        // Shortcode + passkey are only required for production. In sandbox
+        // the plugin falls back to Daraja's published test shortcode/passkey
+        // so operators can run a sandbox transaction with just the consumer
+        // key/secret from their Daraja app.
         $request->validate([
             'consumer_key' => ['nullable', 'string', 'min:3'],
             'consumer_secret' => ['nullable', 'string', 'min:3'],
-            'passkey' => ['nullable', 'string', 'min:3'],
-            'shortcode' => ['required', 'string', 'min:3', 'max:20'],
+            'passkey' => ['nullable', 'string', 'min:3', 'required_if:environment,production'],
+            'shortcode' => ['nullable', 'string', 'min:3', 'max:20', 'required_if:environment,production'],
             'environment' => ['required', 'in:sandbox,production'],
             'validation_url' => ['nullable', 'url'],
             'confirmation_url' => ['nullable', 'url'],
