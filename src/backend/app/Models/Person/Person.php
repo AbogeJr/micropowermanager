@@ -72,7 +72,7 @@ class Person extends BaseModel implements \Stringable, HasAddressesInterface {
 
     protected $appends = ['is_active'];
 
-    /** @var array<string, string> */
+    /** @var array<string, class-string> */
     protected $dispatchesEvents = [
         'deleting' => PersonDeleting::class,
     ];
@@ -201,10 +201,6 @@ class Person extends BaseModel implements \Stringable, HasAddressesInterface {
             })->where('clusters.id', '=', $clusterId)
             ->orderBy('people.id')
             ->orderBy('cities.id');
-    }
-
-    public function getId(): int {
-        return $this->id;
     }
 
     protected function getIsActiveAttribute(): bool {

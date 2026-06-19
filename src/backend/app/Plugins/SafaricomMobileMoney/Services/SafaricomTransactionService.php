@@ -13,7 +13,7 @@ use App\Plugins\SafaricomMobileMoney\Models\SafaricomTransaction;
 use App\Services\AbstractPaymentAggregatorTransactionService;
 use App\Services\DeviceService;
 use App\Services\Interfaces\IBaseService;
-use App\Services\Interfaces\PaymentInitializer;
+use App\Services\Interfaces\PaymentInitiator;
 use App\Services\PersonService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -25,7 +25,7 @@ use Ramsey\Uuid\Uuid;
 /**
  * @implements IBaseService<SafaricomTransaction>
  */
-class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionService implements IBaseService, PaymentInitializer {
+class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionService implements IBaseService, PaymentInitiator {
     public function __construct(
         private Meter $meter,
         private Address $address,
@@ -52,11 +52,11 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
             'serial_id' => $this->getSerialId(),
             'status' => SafaricomTransaction::STATUS_REQUESTED,
             'currency' => 'KES',
-            'customer_id' => $this->getCustomerId(),
-            'amount' => $this->getAmount(),
+            'customer_id' => $this->customerId,
+            'amount' => $this->amount,
             'metadata' => [
                 'serial_id' => $this->getSerialId(),
-                'customer_id' => $this->getCustomerId(),
+                'customer_id' => $this->customerId,
             ],
         ];
     }
@@ -119,11 +119,14 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
     }
 
     public function getSafaricomTransaction(): SafaricomTransaction {
-        return $this->getPaymentAggregatorTransaction();
+        /** @var SafaricomTransaction $tx */
+        $tx = $this->paymentProviderTransaction;
+
+        return $tx;
     }
 
     public function getSerialId(): ?string {
-        return $this->getMeterSerialNumber();
+        return $this->meterSerialNumber;
     }
 
     public function processSuccessfulPayment(int $companyId, SafaricomTransaction $transaction): void {
@@ -144,9 +147,12 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
      * then issues the STK Push so we don't end up with orphaned transaction
      * rows when Daraja errors out synchronously.
      *
-     * @return array{transaction: Transaction, provider_data: array<string, mixed>}
+     * process_immediately is always false: M-PESA only knows the customer
+     * paid once their async STK callback fires (or our poll picks it up).
+     *
+     * @return array{transaction: Transaction, provider_data: array<string, mixed>, process_immediately: bool}
      */
-    public function initializePayment(
+    public function initiatePayment(
         float $amount,
         string $sender,
         string $message,
@@ -166,9 +172,7 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
         // — Daraja rejects 07.../+254... formats outright.
         $normalisedPhone = $this->normalisePhoneNumber($sender);
         if ($normalisedPhone === null) {
-            throw new \InvalidArgumentException(
-                'Phone number must be a Kenyan M-PESA number (e.g. 0712345678 or 254712345678).',
-            );
+            throw new \InvalidArgumentException('Phone number must be a Kenyan M-PESA number (e.g. 0712345678 or 254712345678).');
         }
 
         // Daraja caps AccountReference to 12 chars and TransactionDesc to 13.
@@ -228,6 +232,7 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
                     'merchant_request_id' => $safaricomTxn->getMerchantRequestId(),
                     'customer_message' => $result['customer_message'] ?? null,
                 ],
+                'process_immediately' => false,
             ];
         } catch (\Exception $e) {
             DB::connection('tenant')->rollBack();

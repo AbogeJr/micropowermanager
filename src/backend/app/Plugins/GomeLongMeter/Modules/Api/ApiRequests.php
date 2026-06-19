@@ -19,7 +19,7 @@ class ApiRequests {
      * @return array<string, mixed>|string
      */
     public function get(GomeLongCredential $credentials, array $params, string $slug): array|string {
-        $url = $credentials->getApiUrl().$slug;
+        $url = $credentials->api_url.$slug;
         foreach ($params as $key => $value) {
             $url .= $key.'='.$value.'&';
         }
@@ -36,14 +36,13 @@ class ApiRequests {
 
             if ($result['ReturnCode'] !== 0) {
                 return $result['Data'];
-            } else {
-                throw new GomeLongApiResponseException($result['ReturnMessage']);
             }
+            throw new GomeLongApiResponseException($result['ReturnMessage']);
         } catch (GuzzleException|GomeLongApiResponseException $e) {
             Log::critical('GomeLong API request failed', [
                 'message :' => $e->getMessage(),
             ]);
-            throw new GomeLongApiResponseException($e->getMessage());
+            throw new GomeLongApiResponseException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -53,7 +52,7 @@ class ApiRequests {
      * @return array<string, mixed>|string
      */
     public function post(GomeLongCredential $credentials, array $params, string $slug): array|string {
-        $url = $credentials->getApiUrl().$slug;
+        $url = $credentials->api_url.$slug;
         try {
             $request = $this->httpClient->post(
                 $url,
@@ -69,14 +68,13 @@ class ApiRequests {
 
             if ($result['ReturnCode'] !== 0) {
                 return $result['Data'];
-            } else {
-                throw new GomeLongApiResponseException($result['ReturnMessage']);
             }
+            throw new GomeLongApiResponseException($result['ReturnMessage']);
         } catch (GuzzleException|GomeLongApiResponseException $e) {
             Log::critical('GomeLong API request failed', [
                 'message :' => $e->getMessage(),
             ]);
-            throw new GomeLongApiResponseException($e->getMessage());
+            throw new GomeLongApiResponseException($e->getMessage(), $e->getCode(), $e);
         }
     }
 }

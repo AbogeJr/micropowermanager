@@ -8,7 +8,7 @@ use App\Models\Transaction\BasePaymentProviderTransaction;
 use App\Models\Transaction\Transaction;
 use App\Models\Transaction\TransactionConflicts;
 use App\Plugins\WavecomPaymentProvider\Models\WaveComTransaction;
-use App\Plugins\WavecomPaymentProvider\Services\TransactionService;
+use App\Plugins\WavecomPaymentProvider\Services\WaveMoneyTransactionService;
 use App\Providers\Interfaces\ITransactionProvider;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -18,7 +18,7 @@ class WaveComTransactionProvider implements ITransactionProvider {
     private Transaction $transaction;
 
     public function __construct(
-        private TransactionService $transactionService,
+        private WaveMoneyTransactionService $transactionService,
         private TransactionConflicts $transactionConflicts,
         private WaveComTransaction $waveComTransaction,
     ) {}
@@ -47,15 +47,15 @@ class WaveComTransactionProvider implements ITransactionProvider {
     }
 
     public function getMessage(): string {
-        return $this->getTransaction()->getMessage();
+        return $this->transaction->message;
     }
 
     public function getAmount(): float {
-        return $this->getTransaction()->getAmount();
+        return $this->transaction->amount;
     }
 
     public function getSender(): string {
-        return $this->getTransaction()->getSender();
+        return $this->transaction->sender;
     }
 
     public function saveCommonData(): Model {
@@ -77,9 +77,5 @@ class WaveComTransactionProvider implements ITransactionProvider {
         ]);
         $conflict->transaction()->associate($this->waveComTransaction);
         $conflict->save();
-    }
-
-    public function getTransaction(): Transaction {
-        return $this->transaction;
     }
 }

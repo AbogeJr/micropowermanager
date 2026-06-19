@@ -6,17 +6,12 @@ use App\Models\Transaction\Transaction;
 use App\Models\Transaction\TransactionConflicts;
 use App\Plugins\SwiftaPaymentProvider\Models\SwiftaTransaction;
 use App\Plugins\SwiftaPaymentProvider\Services\SwiftaTransactionService;
-use App\Plugins\WavecomPaymentProvider\Models\WaveComTransaction;
-use App\Plugins\WaveMoneyPaymentProvider\Models\WaveMoneyTransaction;
 use App\Providers\Interfaces\ITransactionProvider;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class SwiftaTransactionProvider implements ITransactionProvider {
-    /** @var array<string, mixed> */
-    private array $validData = [];
-
     public function __construct(
         private SwiftaTransaction $swiftaTransaction,
         private Transaction $transaction,
@@ -37,8 +32,6 @@ class SwiftaTransactionProvider implements ITransactionProvider {
         } catch (\Exception $exception) {
             throw new \Exception($exception->getMessage(), $exception->getCode(), $exception);
         }
-
-        $this->setValidData($swiftaTransactionData);
     }
 
     public function saveTransaction(): void {
@@ -67,26 +60,8 @@ class SwiftaTransactionProvider implements ITransactionProvider {
         $conflict->save();
     }
 
-    public function getTransaction(): Transaction {
-        return $this->transaction;
-    }
-
-    /**
-     * @param array<string, mixed> $swiftaTransactionData
-     */
-    public function setValidData(array $swiftaTransactionData): void {
-        $this->validData = $swiftaTransactionData;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function getValidData(): array {
-        return $this->validData;
-    }
-
-    public function getSubTransaction(): SwiftaTransaction|WaveMoneyTransaction|WaveComTransaction {
-        return $this->swiftaTransactionService->getSwiftaTransaction();
+    public function getProviderTransaction(): SwiftaTransaction {
+        return $this->swiftaTransactionService->paymentProviderTransaction;
     }
 
     /**
@@ -107,11 +82,11 @@ class SwiftaTransactionProvider implements ITransactionProvider {
     }
 
     public function getAmount(): float {
-        return $this->getTransaction()->amount;
+        return $this->transaction->amount;
     }
 
     public function getSender(): string {
-        return $this->getTransaction()->message;
+        return $this->transaction->message;
     }
 
     public function saveCommonData(): Model {

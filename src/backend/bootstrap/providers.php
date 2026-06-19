@@ -16,7 +16,9 @@ use App\Plugins\MesombPaymentProvider\Providers\MesombServiceProvider;
 use App\Plugins\MicroStarMeter\Providers\MicroStarMeterServiceProvider;
 use App\Plugins\OdysseyDataExport\Providers\OdysseyDataExportServiceProvider;
 use App\Plugins\PaystackPaymentProvider\Providers\PaystackPaymentProviderServiceProvider;
+use App\Plugins\PesapalPaymentProvider\Providers\PesapalPaymentProviderServiceProvider;
 use App\Plugins\Prospect\Providers\ProspectServiceProvider;
+use App\Plugins\SafaricomMobileMoney\Providers\SafaricomMobileMoneyServiceProvider;
 use App\Plugins\SmsTransactionParser\Providers\SmsTransactionParserServiceProvider;
 use App\Plugins\SparkMeter\Providers\SparkMeterServiceProvider;
 use App\Plugins\SparkShs\Providers\SparkShsServiceProvider;
@@ -32,7 +34,6 @@ use App\Plugins\WaveMoneyPaymentProvider\Providers\WaveMoneyPaymentProviderServi
 use App\Providers\ApiKeyServiceProvider;
 use App\Providers\AppServiceProvider;
 use App\Providers\HorizonServiceProvider;
-use App\Plugins\SafaricomMobileMoney\Providers\SafaricomMobileMoneyServiceProvider;
 use App\Providers\QueueServiceProvider;
 use App\Providers\ServicesProvider;
 
@@ -59,6 +60,7 @@ return [
     MicroStarMeterServiceProvider::class,
     OdysseyDataExportServiceProvider::class,
     PaystackPaymentProviderServiceProvider::class,
+    PesapalPaymentProviderServiceProvider::class,
     ProspectServiceProvider::class,
     SafaricomMobileMoneyServiceProvider::class,
     SparkMeterServiceProvider::class,

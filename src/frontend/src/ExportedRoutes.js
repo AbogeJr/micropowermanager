@@ -75,6 +75,11 @@ import PaystackOverview from "@/plugins/paystack-payment-provider/modules/Overvi
 import PaystackPublicPayment from "@/plugins/paystack-payment-provider/modules/Payment/PublicPaymentForm.vue"
 import PaystackPublicResult from "@/plugins/paystack-payment-provider/modules/Payment/PublicPaymentResult.vue"
 import PaystackTransaction from "@/plugins/paystack-payment-provider/modules/Transaction/Transaction.vue"
+import PesapalCredential from "@/plugins/pesapal-payment-provider/modules/Overview/Credential.vue"
+import PesapalOverview from "@/plugins/pesapal-payment-provider/modules/Overview/Overview.vue"
+import PesapalPublicPayment from "@/plugins/pesapal-payment-provider/modules/Payment/PublicPaymentForm.vue"
+import PesapalPublicResult from "@/plugins/pesapal-payment-provider/modules/Payment/PublicPaymentResult.vue"
+import PesapalTransaction from "@/plugins/pesapal-payment-provider/modules/Transaction/Transaction.vue"
 import ProspectOverview from "@/plugins/prospect/modules/Overview/Overview.vue"
 import ProspectSettings from "@/plugins/prospect/modules/Setting/Setting.vue"
 import SafaricomMobileMoneyCredential from "@/plugins/safaricom-mobile-money/modules/Overview/Credential.vue"
@@ -105,6 +110,7 @@ import SunKingShsOverview from "@/plugins/sun-king-shs/modules/Overview/Overview
 import SwiftaOverview from "@/plugins/swifta-payment-provider/modules/Overview/Overview.vue"
 import TextbeeSmsGatewayOverview from "@/plugins/textbee-sms-gateway/modules/Overview/Overview.vue"
 import ViberMessagingOverview from "@/plugins/viber-messaging/modules/Overview/Overview.vue"
+import VodacomMzOverview from "@/plugins/vodacom-mz-payment-provider/modules/Overview/Overview.vue"
 import WaveMoneyOverview from "@/plugins/wave-money-payment-provider/modules/Overview/Overview.vue"
 import WaveMoneyPayment from "@/plugins/wave-money-payment-provider/modules/Payment/Payment.vue"
 import WaveMoneyResult from "@/plugins/wave-money-payment-provider/modules/Payment/Result.vue"
@@ -1426,6 +1432,68 @@ export const exportedRoutes = [
     ],
   },
   {
+    path: "/pesapal/public",
+    component: ChildRouteWrapper,
+    children: [
+      {
+        path: "payment/:companyHash",
+        component: PesapalPublicPayment,
+        name: "/pesapal/public/payment",
+      },
+      {
+        path: "result/:companyHash",
+        name: "/pesapal/public/result",
+        component: PesapalPublicResult,
+      },
+    ],
+  },
+  {
+    path: "/pesapal",
+    component: ChildRouteWrapper,
+    meta: {
+      sidebar: {
+        enabled_by_mpm_plugin_id: 30,
+        name: "Pesapal",
+        icon: "payment",
+      },
+    },
+    children: [
+      {
+        path: "overview",
+        component: PesapalOverview,
+        meta: {
+          layout: "default",
+          sidebar: {
+            enabled: true,
+            name: "Overview",
+          },
+        },
+      },
+      {
+        path: "credential",
+        component: PesapalCredential,
+        meta: {
+          layout: "default",
+          sidebar: {
+            enabled: true,
+            name: "Credentials",
+          },
+        },
+      },
+      {
+        path: "transactions",
+        component: PesapalTransaction,
+        meta: {
+          layout: "default",
+          sidebar: {
+            enabled: true,
+            name: "Transactions",
+          },
+        },
+      },
+    ],
+  },
+  {
     path: "/micro-star-meters",
     component: ChildRouteWrapper,
     meta: {
@@ -1740,6 +1808,30 @@ export const exportedRoutes = [
     ],
   },
   {
+    path: "/vodacom-mz",
+    component: ChildRouteWrapper,
+    meta: {
+      sidebar: {
+        enabled_by_mpm_plugin_id: 19,
+        name: "Vodacom MZ",
+        icon: "payments",
+      },
+    },
+    children: [
+      {
+        path: "overview",
+        component: VodacomMzOverview,
+        meta: {
+          layout: "default",
+          sidebar: {
+            enabled: true,
+            name: "Overview",
+          },
+        },
+      },
+    ],
+  },
+  {
     path: "/sms-transaction-parser",
     component: ChildRouteWrapper,
     meta: {
@@ -1779,7 +1871,7 @@ export const exportedRoutes = [
     component: ChildRouteWrapper,
     meta: {
       sidebar: {
-        enabled_by_mpm_plugin_id: 30,
+        enabled_by_mpm_plugin_id: 31,
         name: "Safaricom M-PESA",
         icon: "money",
       },

@@ -4,14 +4,14 @@ namespace App\Plugins\SafaricomMobileMoney\Providers;
 
 use App\Models\Transaction\Transaction;
 use App\Models\Transaction\TransactionConflicts;
+use App\Plugins\SafaricomMobileMoney\Models\SafaricomTransaction;
+use App\Plugins\SafaricomMobileMoney\Services\SafaricomTransactionService;
+use App\Providers\Interfaces\ITransactionProvider;
 use App\Services\SmsService;
 use App\Sms\Senders\SmsConfigs;
 use App\Sms\SmsTypes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
-use App\Plugins\SafaricomMobileMoney\Models\SafaricomTransaction;
-use App\Plugins\SafaricomMobileMoney\Services\SafaricomTransactionService;
-use App\Providers\Interfaces\ITransactionProvider;
 
 class SafaricomMobileMoneyTransactionProvider implements ITransactionProvider {
     private array $validData = [];

@@ -14,7 +14,6 @@ use Illuminate\Support\Carbon;
  * @property      string                   $description
  * @property      Carbon|null              $created_at
  * @property      Carbon|null              $updated_at
- * @property      string|null              $tail_tag
  * @property      string|null              $installation_command
  * @property      string|null              $root_class
  * @property-read Collection<int, Plugins> $plugins
@@ -49,7 +48,8 @@ class MpmPlugin extends BaseModelCentral {
     public const ECREEE_E_TENDER = 27;
     public const SPARK_SHS = 28;
     public const SMS_TRANSACTION_PARSER = 29;
-    public const SAFARICOM_MOBILE_MONEY = 30;
+    public const PESAPAL_PAYMENT_PROVIDER = 30;
+    public const SAFARICOM_MOBILE_MONEY = 31;
 
     protected $table = 'mpm_plugins';
 
@@ -58,5 +58,15 @@ class MpmPlugin extends BaseModelCentral {
      */
     public function plugins(): HasMany {
         return $this->hasMany(Plugins::class);
+    }
+
+    /**
+     * @return array{component: string, adjusted: bool}
+     */
+    public function toRegistrationTailEntry(): array {
+        return [
+            'component' => $this->name,
+            'adjusted' => false,
+        ];
     }
 }

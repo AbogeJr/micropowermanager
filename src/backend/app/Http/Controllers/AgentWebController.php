@@ -40,7 +40,7 @@ class AgentWebController extends Controller {
     public function store(CreateAgentRequest $request): ApiResource {
         $addressData = $this->addressService->createAddressDataFromRequest($request);
         $personData = $this->personService->createPersonDataFromRequest($request);
-        $country = $this->countryService->getByCode($request->get('nationality'));
+        $country = $this->countryService->getByCode($request->input('nationality'));
         $agentData = [
             'password' => $request['password'],
             'email' => $request['email'],
@@ -57,7 +57,7 @@ class AgentWebController extends Controller {
         $databaseProxyData = [
             'email' => $request['email'],
             'fk_company_id' => $companyId,
-            'fk_company_database_id' => $companyDatabase->getId(),
+            'fk_company_database_id' => $companyDatabase->id,
         ];
         $this->databaseProxyService->create($databaseProxyData);
 

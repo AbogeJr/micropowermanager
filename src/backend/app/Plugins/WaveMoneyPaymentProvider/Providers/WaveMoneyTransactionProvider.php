@@ -5,8 +5,6 @@ namespace App\Plugins\WaveMoneyPaymentProvider\Providers;
 use App\Models\Transaction\BasePaymentProviderTransaction;
 use App\Models\Transaction\Transaction;
 use App\Models\Transaction\TransactionConflicts;
-use App\Plugins\SwiftaPaymentProvider\Models\SwiftaTransaction;
-use App\Plugins\WavecomPaymentProvider\Models\WaveComTransaction;
 use App\Plugins\WaveMoneyPaymentProvider\Models\WaveMoneyTransaction;
 use App\Plugins\WaveMoneyPaymentProvider\Modules\Transaction\WaveMoneyTransactionService;
 use App\Providers\Interfaces\ITransactionProvider;
@@ -15,9 +13,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class WaveMoneyTransactionProvider implements ITransactionProvider {
-    /** @var array<string, mixed> */
-    private array $validData = [];
-
     public function __construct(
         private WaveMoneyTransaction $waveMoneytransaction,
         private Transaction $transaction,
@@ -38,8 +33,6 @@ class WaveMoneyTransactionProvider implements ITransactionProvider {
         } catch (\Exception $exception) {
             throw new \Exception($exception->getMessage(), $exception->getCode(), $exception);
         }
-
-        $this->setValidData($waveMoneyTransactionData);
     }
 
     public function saveTransaction(): void {
@@ -77,11 +70,11 @@ class WaveMoneyTransactionProvider implements ITransactionProvider {
     }
 
     public function getAmount(): float {
-        return (int) $this->getTransaction()->amount;
+        return (int) $this->transaction->amount;
     }
 
     public function getSender(): string {
-        return $this->getTransaction()->message;
+        return $this->transaction->message;
     }
 
     public function saveCommonData(): Model {
@@ -105,25 +98,7 @@ class WaveMoneyTransactionProvider implements ITransactionProvider {
         $conflict->save();
     }
 
-    public function getTransaction(): Transaction {
-        return $this->transaction;
-    }
-
-    /**
-     * @param array<string, mixed> $waveMoneyTransactionData
-     */
-    public function setValidData(array $waveMoneyTransactionData): void {
-        $this->validData = $waveMoneyTransactionData;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function getValidData(): array {
-        return $this->validData;
-    }
-
-    public function getSubTransaction(): SwiftaTransaction|WaveMoneyTransaction|WaveComTransaction {
-        return $this->waveMoneyTransactionService->getWaveMoneyTransaction();
+    public function getProviderTransaction(): WaveMoneyTransaction {
+        return $this->waveMoneyTransactionService->waveMoneyTransaction;
     }
 }

@@ -27,8 +27,8 @@ class CompanyDatabase extends BaseModelCentral {
     public const TABLE_NAME = 'company_databases';
     public const COL_DATABASE_NAME = 'database_name';
     public const COL_COMPANY_ID = 'company_id';
-    private const CACHE_KEY_PREFIX = 'company_database';
-    private const CACHE_TTL = 3600; // 1 hour in seconds
+    private const string CACHE_KEY_PREFIX = 'company_database';
+    private const int CACHE_TTL = 3600; // 1 hour in seconds
 
     protected static function booted(): void {
         static::saved(function (self $companyDatabase) {
@@ -56,18 +56,6 @@ class CompanyDatabase extends BaseModelCentral {
         return Cache::remember($cacheKey, self::CACHE_TTL, fn () => $this->newQuery()
             ->where(self::COL_COMPANY_ID, '=', $companyId)
             ->firstOrFail());
-    }
-
-    public function getDatabaseName(): string {
-        return $this->database_name;
-    }
-
-    public function getId(): int {
-        return $this->id;
-    }
-
-    public function getCompanyId(): int {
-        return $this->company_id;
     }
 
     private function clearCache(): void {

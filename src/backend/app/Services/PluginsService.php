@@ -61,6 +61,7 @@ class PluginsService {
             MpmPlugin::WAVECOM_PAYMENT_PROVIDER,
             MpmPlugin::VODACOM_MZ_PAYMENT_PROVIDER,
             MpmPlugin::PAYSTACK_PAYMENT_PROVIDER,
+            MpmPlugin::PESAPAL_PAYMENT_PROVIDER,
             MpmPlugin::SAFARICOM_MOBILE_MONEY,
         ];
 
@@ -105,9 +106,8 @@ class PluginsService {
         ];
         $plugin = $this->create($pluginData);
 
-        // 2. Add registration tail (if exists)
-        $registrationTail = $this->registrationTailService->getFirst();
-        $this->registrationTailService->addMpmPluginToRegistrationTail($registrationTail, $mpmPlugin);
+        // 2. Add registration tail step
+        $this->registrationTailService->addMpmPluginToRegistrationTail($mpmPlugin);
 
         // 3. Run installation command
         Artisan::call($mpmPlugin->installation_command);

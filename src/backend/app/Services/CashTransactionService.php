@@ -4,12 +4,15 @@ namespace App\Services;
 
 use App\Models\Transaction\CashTransaction;
 use App\Models\Transaction\Transaction;
-use App\Services\Interfaces\PaymentInitializer;
+use App\Services\Interfaces\PaymentInitiator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-class CashTransactionService implements PaymentInitializer {
-    public function __construct(private CashTransaction $cashTransaction, private Transaction $transaction) {}
+class CashTransactionService implements PaymentInitiator {
+    public function __construct(
+        private CashTransaction $cashTransaction,
+        private Transaction $transaction,
+    ) {}
 
     public function createTransaction(int $creatorId, float $amount, string $sender, string $message, string $type = Transaction::TYPE_DEFERRED_PAYMENT): Transaction {
         return DB::transaction(function () use ($creatorId, $amount, $sender, $message, $type) {
@@ -33,9 +36,9 @@ class CashTransactionService implements PaymentInitializer {
     }
 
     /**
-     * @return array{transaction: Transaction, provider_data: array<string, mixed>}
+     * @return array{transaction: Transaction, provider_data: array<string, mixed>, process_immediately: bool}
      */
-    public function initializePayment(
+    public function initiatePayment(
         float $amount,
         string $sender,
         string $message,
@@ -47,6 +50,6 @@ class CashTransactionService implements PaymentInitializer {
 
         $transaction = $this->createTransaction($creatorId, $amount, $sender, $message, $type);
 
-        return ['transaction' => $transaction, 'provider_data' => []];
+        return ['transaction' => $transaction, 'provider_data' => [], 'process_immediately' => true];
     }
 }

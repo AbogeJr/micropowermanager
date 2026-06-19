@@ -16,20 +16,20 @@ class TestCompany {
 }
 
 trait CreateTenantCompany {
-    protected $companyId = 1;
+    protected int $companyId = 1;
 
     protected function setUpCreateTenantCompany(): void {
-        $databaseProxyManagerService = app(DatabaseProxyManagerService::class);
+        $databaseProxyManagerService = resolve(DatabaseProxyManagerService::class);
 
         $databaseProxyManagerService->buildDatabaseConnectionTestCompany(TestCompany::TEST_COMPANY_DATABASE_NAME);
 
         $this->companyId = $this->createCompany();
     }
 
-    public function createCompany(): string {
-        $companyService = app(CompanyService::class);
-        $companyDatabaseService = app(CompanyDatabaseService::class);
-        $databaseProxyManagerService = app(DatabaseProxyManagerService::class);
+    public function createCompany(): int {
+        $companyService = resolve(CompanyService::class);
+        $companyDatabaseService = resolve(CompanyDatabaseService::class);
+        $databaseProxyManagerService = resolve(DatabaseProxyManagerService::class);
 
         $company = $companyService->create([
             'name' => TestCompany::TEST_COMPANY_NAME,
@@ -40,18 +40,18 @@ trait CreateTenantCompany {
         ]);
 
         $companyDatabaseService->create([
-            'company_id' => $company->getId(),
+            'company_id' => $company->id,
             'database_name' => TestCompany::TEST_COMPANY_DATABASE_NAME,
         ]);
 
         // Populate roles and permissions for the demo company
         $databaseProxyManagerService->runForCompany(
-            $company->getId(),
+            $company->id,
             function (): void {
                 RolesPermissionsPopulator::populate();
             }
         );
 
-        return $company->getId();
+        return $company->id;
     }
 }

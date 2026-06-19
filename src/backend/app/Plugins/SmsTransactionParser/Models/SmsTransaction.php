@@ -9,7 +9,6 @@ use App\Models\Transaction\Transaction;
 use App\Models\Transaction\TransactionConflicts;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -36,54 +35,11 @@ class SmsTransaction extends BasePaymentProviderTransaction {
     public const STATUS_PENDING = 0;
     public const STATUS_SUCCESS = 1;
 
-    public function getTransactionReference(): string {
-        return $this->transaction_reference;
-    }
-
-    public function getSenderPhone(): string {
-        return $this->sender_phone;
-    }
-
-    public function getDeviceSerial(): ?string {
-        return $this->device_serial;
-    }
-
-    public function getAmount(): float {
-        return $this->amount;
-    }
-
-    public function getRawMessage(): string {
-        return $this->raw_message;
-    }
-
-    public function getProviderName(): string {
-        return $this->provider_name;
-    }
-
-    public function setStatus(int $status): void {
-        $this->status = $status;
-    }
-
-    /**
-     * @return MorphMany<TransactionConflicts, $this>
-     */
-    public function conflicts(): MorphMany {
-        return $this->morphMany(TransactionConflicts::class, 'transaction');
-    }
-
     public function getManufacturerTransferType(): ?string {
         return 'SmsTransaction';
     }
 
-    public function getDescription(): ?string {
-        return $this->raw_message;
-    }
-
     public static function getTransactionName(): string {
         return self::RELATION_NAME;
-    }
-
-    public function getId(): int {
-        return $this->id;
     }
 }

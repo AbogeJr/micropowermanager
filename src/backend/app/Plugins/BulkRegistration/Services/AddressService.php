@@ -3,6 +3,7 @@
 namespace App\Plugins\BulkRegistration\Services;
 
 use App\Models\Address\Address;
+use App\Models\Person\Person;
 
 class AddressService extends CreatorService {
     public function __construct(Address $address) {
@@ -29,7 +30,7 @@ class AddressService extends CreatorService {
             'is_primary' => 1,
         ];
         $returnAddresses[] = $firstAddressData;
-        if (array_key_exists($csvData[$addressConfig['alternative_phone']], $csvData)) {
+        if (array_key_exists((string) $csvData[$addressConfig['alternative_phone']], $csvData)) {
             $alternativeAddress = [
                 'owner_type' => 'person',
                 'owner_id' => $csvData[$addressConfig['person_id']],
@@ -42,14 +43,14 @@ class AddressService extends CreatorService {
         $this->createRelatedDataIfDoesNotExists($returnAddresses);
     }
 
-    public function createForPerson(int $personId, int $cityId, ?string $phone, ?string $email, ?string $street, bool $isPrimary): Address {
+    public function createForPerson(Person $person, int $cityId, ?string $phone, ?string $email, ?string $street, bool $isPrimary): Address {
         $address = new Address();
-        $address->setOwner($personId, 'person');
-        $address->setCityId($cityId);
-        $address->setPhone($phone);
-        $address->setEmail($email);
-        $address->setIsPrimary($isPrimary);
-        $address->setStreet($street);
+        $address->owner()->associate($person);
+        $address->city_id = $cityId;
+        $address->phone = $phone;
+        $address->email = $email;
+        $address->is_primary = $isPrimary ? 1 : 0;
+        $address->street = $street;
         $address->save();
 
         return $address;

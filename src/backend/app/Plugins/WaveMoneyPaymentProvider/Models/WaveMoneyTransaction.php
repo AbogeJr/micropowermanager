@@ -7,7 +7,6 @@ use App\Models\Transaction\Transaction;
 use App\Models\Transaction\TransactionConflicts;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -39,61 +38,6 @@ class WaveMoneyTransaction extends BasePaymentProviderTransaction {
     public const MAX_ATTEMPTS = 5;
 
     protected $table = 'wave_money_transactions';
-
-    public function getAmount(): float {
-        return (int) $this->amount;
-    }
-
-    public function getCurrency(): string {
-        return $this->currency;
-    }
-
-    public function getOrderId(): string {
-        return $this->order_id;
-    }
-
-    public function getReferenceId(): string {
-        return $this->reference_id;
-    }
-
-    public function getId(): int {
-        return $this->id;
-    }
-
-    public function setStatus(int $status): void {
-        $this->status = $status;
-    }
-
-    public function setExternalTransactionId(string $transactionId): void {
-        $this->external_transaction_id = $transactionId;
-    }
-
-    public function setOrderId(string $orderId): void {
-        $this->order_id = $orderId;
-    }
-
-    public function setReferenceId(string $referenceId): void {
-        $this->reference_id = $referenceId;
-    }
-
-    public function setCustomerId(int $customerId): void {
-        $this->customer_id = $customerId;
-    }
-
-    public function setMeterSerial(string $meterSerialNumber): void {
-        $this->meter_serial = $meterSerialNumber;
-    }
-
-    public function setAmount(int $amount): void {
-        $this->amount = $amount;
-    }
-
-    /**
-     * @return MorphMany<TransactionConflicts, $this>
-     */
-    public function conflicts(): MorphMany {
-        return $this->morphMany(TransactionConflicts::class, 'transaction');
-    }
 
     public static function getTransactionName(): string {
         return self::RELATION_NAME;

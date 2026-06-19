@@ -84,7 +84,7 @@ class SafaricomTransactionController extends Controller {
         }
 
         try {
-            $result = $this->transactionService->initializePayment(
+            $result = $this->transactionService->initiatePayment(
                 amount: (float) $data['amount'],
                 sender: (string) $data['phone_number'],
                 message: (string) ($data['transaction_desc'] ?? $data['account_reference'] ?? $serialId),

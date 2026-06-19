@@ -26,4 +26,4 @@ return new class extends Migration {
             ->where('id', MpmPlugin::SAFARICOM_MOBILE_MONEY)
             ->delete();
     }
-}; 
+};

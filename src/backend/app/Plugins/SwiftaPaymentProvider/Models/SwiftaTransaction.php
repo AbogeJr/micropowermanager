@@ -7,7 +7,6 @@ use App\Models\Transaction\Transaction;
 use App\Models\Transaction\TransactionConflicts;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -33,17 +32,6 @@ class SwiftaTransaction extends BasePaymentProviderTransaction {
     public const STATUS_REQUESTED = -2;
 
     protected $table = 'swifta_transactions';
-
-    public function getAmount(): float {
-        return $this->amount;
-    }
-
-    /**
-     * @return MorphMany<TransactionConflicts, $this>
-     */
-    public function conflicts(): MorphMany {
-        return $this->morphMany(TransactionConflicts::class, 'transaction');
-    }
 
     public static function getTransactionName(): string {
         return self::RELATION_NAME;
