@@ -345,7 +345,7 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
 
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->authService->getAccessToken(),
+                'Authorization' => 'Bearer '.$this->authService->getAccessToken($credential),
                 'Content-Type' => 'application/json',
             ])->post($this->stkPushQueryUrl($credential), $payload);
         } catch (\Throwable $e) {
@@ -460,7 +460,7 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
 
         $password = base64_encode($shortcode.$passkey.$timestamp);
 
-        $callbackUrl = $credential->getResultUrl() ?: $this->buildDefaultResultUrl();
+        $callbackUrl = $credential->result_url ?: $this->buildDefaultResultUrl();
 
         // account_reference + transaction_desc were already truncated to the
         // Daraja-enforced 12/13 char limits during transaction creation.
@@ -480,7 +480,7 @@ class SafaricomTransactionService extends AbstractPaymentAggregatorTransactionSe
 
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer '.$this->authService->getAccessToken(),
+                'Authorization' => 'Bearer '.$this->authService->getAccessToken($credential),
                 'Content-Type' => 'application/json',
             ])->post($this->stkPushUrl($credential), $payload);
         } catch (\Throwable $e) {

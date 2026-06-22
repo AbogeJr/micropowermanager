@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Plugins\SafaricomMobileMoney\Services;
 
 use App\Plugins\SafaricomMobileMoney\Models\SafaricomCredential;
-use Illuminate\Support\Facades\Crypt;
+use App\Traits\EncryptsCredentials;
 
 class SafaricomCredentialService {
-    private const ENCRYPTED_FIELDS = ['consumer_key', 'consumer_secret', 'passkey'];
+    use EncryptsCredentials;
+
+    private const array ENCRYPTED_FIELDS = ['consumer_key', 'consumer_secret', 'passkey'];
 
     public function __construct(
         private SafaricomCredential $credential,
@@ -21,7 +23,7 @@ class SafaricomCredentialService {
             return $this->createCredentials();
         }
 
-        return $credential;
+        return $this->decryptCredentialFields($credential, self::ENCRYPTED_FIELDS);
     }
 
     public function createCredentials(): SafaricomCredential {
@@ -48,19 +50,16 @@ class SafaricomCredentialService {
     public function updateCredentials(array $data): SafaricomCredential {
         $credential = $this->getCredentials();
 
-        $secretsRotated = false;
-        foreach (self::ENCRYPTED_FIELDS as $field) {
-            if (array_key_exists($field, $data)) {
-                $secretsRotated = true;
-                $data[$field] = Crypt::encrypt($data[$field]);
-            }
-        }
-
+        // Caller is expected to drop blank secrets from $data so the stored
+        // ciphertext is preserved. Anything still in $data is a real change.
+        $secretsRotated = array_key_exists('consumer_key', $data)
+            || array_key_exists('consumer_secret', $data)
+            || array_key_exists('passkey', $data);
         $environmentChanged = array_key_exists('environment', $data)
-            && $data['environment'] !== $credential->getEnvironment();
+            && $data['environment'] !== $credential->environment;
 
-        $credential->update($data);
-        $credential->refresh();
+        $credential->update($this->encryptCredentialFields($data, self::ENCRYPTED_FIELDS));
+        $this->decryptCredentialFields($credential, self::ENCRYPTED_FIELDS);
 
         if ($secretsRotated || $environmentChanged) {
             $this->authService->clearAccessToken();

@@ -4,7 +4,6 @@ namespace App\Plugins\SafaricomMobileMoney\Models;
 
 use App\Models\Base\BaseModel;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Crypt;
 
 /**
  * @property int         $id
@@ -24,27 +23,15 @@ class SafaricomCredential extends BaseModel {
     protected $table = 'safaricom_credentials';
 
     public function getConsumerKey(): string {
-        try {
-            return Crypt::decrypt($this->attributes['consumer_key']);
-        } catch (\Throwable) {
-            return $this->attributes['consumer_key'] ?? '';
-        }
+        return $this->consumer_key ?? '';
     }
 
     public function getConsumerSecret(): string {
-        try {
-            return Crypt::decrypt($this->attributes['consumer_secret']);
-        } catch (\Throwable) {
-            return $this->attributes['consumer_secret'] ?? '';
-        }
+        return $this->consumer_secret ?? '';
     }
 
     public function getPasskey(): string {
-        try {
-            return Crypt::decrypt($this->attributes['passkey']);
-        } catch (\Throwable) {
-            return $this->attributes['passkey'] ?? '';
-        }
+        return $this->passkey ?? '';
     }
 
     public function getShortcode(): string {
@@ -84,31 +71,11 @@ class SafaricomCredential extends BaseModel {
             : '';
     }
 
-    public function getEnvironment(): string {
-        return $this->environment ?? 'sandbox';
-    }
-
     public function isProduction(): bool {
-        return $this->getEnvironment() === 'production';
+        return $this->environment === 'production';
     }
 
     public function isSandbox(): bool {
-        return $this->getEnvironment() === 'sandbox';
-    }
-
-    public function getValidationUrl(): ?string {
-        return $this->validation_url;
-    }
-
-    public function getConfirmationUrl(): ?string {
-        return $this->confirmation_url;
-    }
-
-    public function getTimeoutUrl(): ?string {
-        return $this->timeout_url;
-    }
-
-    public function getResultUrl(): ?string {
-        return $this->result_url;
+        return ($this->environment ?? 'sandbox') === 'sandbox';
     }
 }

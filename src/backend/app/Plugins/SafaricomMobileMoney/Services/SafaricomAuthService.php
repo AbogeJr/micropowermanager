@@ -10,20 +10,17 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class SafaricomAuthService {
-    private const CACHE_TTL = 3500; // 1 hour - 100 seconds buffer
+    private const int CACHE_TTL = 3500; // 1 hour - 100 seconds buffer
 
-    public function __construct(
-        private SafaricomCredential $credential,
-    ) {}
-
-    public function getAccessToken(): string {
-        $credential = $this->credential->newQuery()->first();
-        if (!$credential) {
-            throw new \RuntimeException('Safaricom credentials are not configured.');
-        }
-
+    /**
+     * Caller is expected to pass a credential that has already been decrypted
+     * via SafaricomCredentialService::getCredentials(). This mirrors the
+     * Pesapal token-service shape — the credential service owns
+     * encryption/decryption; downstream services only see plaintext.
+     */
+    public function getAccessToken(SafaricomCredential $credential): string {
         return Cache::remember(
-            $this->cacheKey($credential->getEnvironment()),
+            $this->cacheKey($credential->environment),
             self::CACHE_TTL,
             fn () => $this->generateAccessToken($credential),
         );
@@ -51,7 +48,7 @@ class SafaricomAuthService {
             ])->get($url);
         } catch (\Throwable $e) {
             Log::error('Safaricom OAuth network error', [
-                'environment' => $credential->getEnvironment(),
+                'environment' => $credential->environment,
                 'url' => $url,
                 'error' => $e->getMessage(),
             ]);
@@ -66,7 +63,7 @@ class SafaricomAuthService {
             $status = $response->status();
             $bodyExcerpt = substr($response->body(), 0, 400);
             Log::error('Safaricom OAuth rejected', [
-                'environment' => $credential->getEnvironment(),
+                'environment' => $credential->environment,
                 'url' => $url,
                 'status' => $status,
                 'body_excerpt' => $bodyExcerpt,
